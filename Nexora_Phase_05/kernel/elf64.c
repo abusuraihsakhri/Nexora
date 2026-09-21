@@ -109,6 +109,25 @@ nexora_status_t nexora_elf64_load(const void *image,
     if (!loaded_any) return NEXORA_ERR(NEXORA_EINVAL);
     if (!entry_in_executable_segment) return NEXORA_ERR(NEXORA_EACCES);
 
+    /* Pairwise overlap check: reject images with intersecting PT_LOAD segments */
+    for (uint16_t i = 0; i < eh->phnum; ++i) {
+        const struct elf64_phdr *phi = (const struct elf64_phdr *)(bytes + eh->phoff + (uint64_t)i * eh->phentsize);
+        if (phi->type != PT_LOAD) continue;
+        uint64_t start_i = phi->vaddr;
+        uint64_t end_i = phi->vaddr + phi->memsz;
+
+        for (uint16_t j = i + 1; j < eh->phnum; ++j) {
+            const struct elf64_phdr *phj = (const struct elf64_phdr *)(bytes + eh->phoff + (uint64_t)j * eh->phentsize);
+            if (phj->type != PT_LOAD) continue;
+            uint64_t start_j = phj->vaddr;
+            uint64_t end_j = phj->vaddr + phj->memsz;
+
+            if (start_i < end_j && start_j < end_i) {
+                return NEXORA_ERR(NEXORA_EINVAL);
+            }
+        }
+    }
+
     /* Mapping pass: all purely structural validation has succeeded. */
     for (uint16_t i = 0; i < eh->phnum; ++i) {
         const struct elf64_phdr *ph = (const struct elf64_phdr *)(bytes + eh->phoff + (uint64_t)i * eh->phentsize);

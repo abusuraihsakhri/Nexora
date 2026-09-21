@@ -506,6 +506,50 @@ static void test_syscall_return_frame_rejects_non_canonical_rip(void) {
     nexora_syscall_set_current_process(NULL);
 }
 
+static void test_elf_loader_rejects_overlapping_segments(void) {
+    reset_runtime();
+    unsigned char image[1024];
+    memset(image, 0, sizeof(image));
+    struct test_elf64_ehdr *eh = (struct test_elf64_ehdr *)image;
+    eh->ident[0] = 0x7f; eh->ident[1] = 'E'; eh->ident[2] = 'L'; eh->ident[3] = 'F';
+    eh->ident[4] = 2; eh->ident[5] = 1; eh->ident[6] = 1;
+    eh->type = 2;
+    eh->machine = 62;
+    eh->version = 1;
+    eh->entry = 0x400000;
+    eh->phoff = sizeof(*eh);
+    eh->ehsize = sizeof(*eh);
+    eh->phentsize = sizeof(struct test_elf64_phdr);
+    eh->phnum = 2;
+
+    struct test_elf64_phdr *ph1 = (struct test_elf64_phdr *)(image + eh->phoff);
+    ph1->type = 1;
+    ph1->flags = 4u | 1u;
+    ph1->offset = 0x100;
+    ph1->vaddr = 0x400000;
+    ph1->filesz = 16;
+    ph1->memsz = 4096;
+    ph1->align = 1;
+
+    struct test_elf64_phdr *ph2 = (struct test_elf64_phdr *)(image + eh->phoff + sizeof(struct test_elf64_phdr));
+    ph2->type = 1;
+    ph2->flags = 4u | 2u;
+    ph2->offset = 0x110;
+    ph2->vaddr = 0x400800;
+    ph2->filesz = 16;
+    ph2->memsz = 4096;
+    ph2->align = 1;
+
+    for (unsigned i = 0; i < 32; ++i) image[0x100 + i] = (unsigned char)(0x90 + i);
+
+    struct map_capture capture = {0};
+    const struct nexora_user_vm_ops ops = {.map_segment = capture_map_segment};
+    uintptr_t entry = 0;
+    ASSERT_EQ(nexora_elf64_load(image, sizeof(image), &p1, &ops, &capture, &entry),
+              NEXORA_ERR(NEXORA_EINVAL));
+    ASSERT_EQ(capture.calls, 0);
+}
+
 int main(void) {
     test_abi_query();
     test_abi_query_without_backend();
@@ -527,7 +571,8 @@ int main(void) {
     test_elf_loader_validates_and_maps();
     test_elf_loader_rejects_wx();
     test_elf_loader_rejects_nonexec_entry();
+    test_elf_loader_rejects_overlapping_segments();
     test_syscall_return_frame_rejects_non_canonical_rip();
-    puts("Phase 5 host tests: PASS (21 test groups)");
+    puts("Phase 5 host tests: PASS (22 test groups)");
     return 0;
 }
