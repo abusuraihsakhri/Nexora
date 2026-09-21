@@ -1,6 +1,11 @@
 #include <kernel/printk.h>
 #include <kernel/memory.h>
 #include <kernel/panic.h>
+#include <kernel/frame.h>
+#include <kernel/slab.h>
+#include <kernel/x86_64.h>
+#include <kernel/idt.h>
+#include <ai/backend_bridge.h>
 #include <ai/tensor.h>
 #include <ai/work.h>
 #include <ai/scheduler.h>
@@ -185,6 +190,35 @@ void kmain(void) {
 
     early_heap_init();
     kputs("Early heap initialized.\n");
+
+    frame_init(0x2000000, 1024);
+    kputs("Physical frame allocator initialized (1024 frames).\n");
+
+    slab_init();
+    kputs("Kernel slab caches initialized (ai_tensor & ai_work_node).\n");
+
+    /* Wire Phase 5 privilege boundary & CPU tables (Milestone M3) */
+    extern u8 stack_top[];
+    nexora_x86_gdt_init((uintptr_t)stack_top);
+    kputs("GDT and TSS loaded (Ring 0 / Ring 3 descriptors active).\n");
+
+    idt_init();
+    kputs("IDT loaded (256 vectors configured).\n");
+
+    nexora_x86_syscall_init((uintptr_t)stack_top);
+    kputs("Syscall MSRs & per-CPU GS initialized.\n");
+
+    ai_backend_bridge_install();
+    kputs("AI runtime backend bridge installed for userspace syscalls.\n");
+
+    /* Milestone M3: Verify privilege boundary by deliberate int3 */
+    u64 bp_before = idt_breakpoint_count();
+    idt_test_breakpoint();
+    if (idt_breakpoint_count() == bp_before + 1) {
+        kputs("Privilege boundary verified: deliberate int3 caught by IDT (#BP).\n");
+    } else {
+        panic("IDT breakpoint verification failed");
+    }
 
     ai_tensor_system_init();
     kputs("AI runtime metadata initialized.\n");

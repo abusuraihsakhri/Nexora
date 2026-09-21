@@ -15,9 +15,29 @@ CFLAGS  := -std=c11 -O2 -Wall -Wextra -Werror \
            -m64 -mno-red-zone \
            -Iinclude
 
-HOST_CFLAGS := -std=c11 -O2 -Wall -Wextra -Werror -Iinclude
+HOST_CFLAGS := -std=c11 -O2 -Wall -Wextra -Werror -Iinclude -DHOST_TEST
 ASFLAGS := -m64 -ffreestanding -fno-pic -fno-pie
 LDFLAGS := -nostdlib -z max-page-size=0x1000 -T linker.ld
+
+ARCH_C_SOURCES := \
+	src/arch/x86_64/gdt.c \
+	src/arch/x86_64/idt.c \
+	src/arch/x86_64/syscall_msr.c
+
+ARCH_ASM_SOURCES := \
+	src/arch/x86_64/boot.S \
+	src/arch/x86_64/interrupts.S \
+	src/arch/x86_64/syscall_entry.S \
+	src/arch/x86_64/usermode.S
+
+SYS_SOURCES := \
+	src/kernel/handle.c \
+	src/kernel/process.c \
+	src/kernel/uaccess.c \
+	src/kernel/backend.c \
+	src/kernel/elf64.c \
+	src/kernel/syscall.c \
+	src/ai/backend_bridge.c
 
 AI_SOURCES := \
 	src/ai/tensor.c \
@@ -34,9 +54,11 @@ C_SOURCES := \
 	src/mm/bump.c \
 	src/mm/frame.c \
 	src/mm/slab.c \
+	$(ARCH_C_SOURCES) \
+	$(SYS_SOURCES) \
 	$(AI_SOURCES)
 
-ASM_SOURCES := src/arch/x86_64/boot.S
+ASM_SOURCES := $(ARCH_ASM_SOURCES)
 
 OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(C_SOURCES)) \
            $(patsubst %.S,$(BUILD)/%.o,$(ASM_SOURCES))
@@ -47,6 +69,8 @@ HOST_TEST_SOURCES := \
 	src/mm/bump.c \
 	src/mm/frame.c \
 	src/mm/slab.c \
+	$(ARCH_C_SOURCES) \
+	$(SYS_SOURCES) \
 	$(AI_SOURCES)
 
 HOST_REPORT_SOURCES := \
@@ -55,6 +79,8 @@ HOST_REPORT_SOURCES := \
 	src/mm/bump.c \
 	src/mm/frame.c \
 	src/mm/slab.c \
+	$(ARCH_C_SOURCES) \
+	$(SYS_SOURCES) \
 	$(AI_SOURCES)
 
 .PHONY: all clean run debug check test-host phase14-report verify-phase14

@@ -8,6 +8,9 @@
 #include <kernel/memory.h>
 #include <kernel/frame.h>
 #include <kernel/slab.h>
+#include <kernel/x86_64.h>
+#include <kernel/idt.h>
+#include <ai/backend_bridge.h>
 
 static unsigned tests_run = 0;
 static unsigned tests_failed = 0;
@@ -337,6 +340,48 @@ static void test_slab_work_node_churn(void) {
     CHECK(kmem_cache_allocated_objects(ai_work_node_cache) == 0);
 }
 
+extern bool nexora_x86_gdt_is_loaded(void);
+extern const u64 *nexora_x86_get_gdt(void);
+
+static void test_idt_and_privilege_boundary(void) {
+    /* Test GDT initialization */
+    nexora_x86_gdt_init(0x7fff0000);
+    CHECK(nexora_x86_gdt_is_loaded());
+    const u64 *gdt = nexora_x86_get_gdt();
+    CHECK(gdt[0] == 0);
+    CHECK(gdt[1] == 0x00AF9A000000FFFFull); /* Ring 0 code */
+    CHECK(gdt[2] == 0x00CF92000000FFFFull); /* Ring 0 data */
+    CHECK(gdt[3] == 0x00CFF2000000FFFFull); /* Ring 3 data */
+    CHECK(gdt[4] == 0x00AFFA000000FFFFull); /* Ring 3 code */
+
+    /* Test Syscall MSR / per-CPU init */
+    nexora_x86_syscall_init(0x7fff0000);
+    CHECK(nexora_bsp_percpu.kernel_rsp == 0x7fff0000);
+    CHECK(nexora_bsp_percpu.cpu_id == 0);
+    CHECK(nexora_bsp_percpu.user_rsp == 0);
+
+    /* Test IDT initialization and gate descriptors */
+    idt_init();
+    CHECK(idt_is_loaded());
+
+    const struct idt_entry64 *gate3 = idt_get_entry(3);
+    CHECK(gate3->selector == NEXORA_GDT_KERNEL_CODE);
+    CHECK(gate3->type_attr == IDT_GATE_USER_TRAP); /* DPL=3, Present, 64-bit Interrupt */
+
+    const struct idt_entry64 *gate14 = idt_get_entry(14);
+    CHECK(gate14->selector == NEXORA_GDT_KERNEL_CODE);
+    CHECK(gate14->type_attr == IDT_GATE_INTERRUPT); /* DPL=0, Present, 64-bit Interrupt */
+
+    /* Test deliberate int3 execution and counter */
+    u64 bp_before = idt_breakpoint_count();
+    idt_test_breakpoint();
+    CHECK(idt_breakpoint_count() == bp_before + 1);
+
+    /* Test AI backend bridge installation */
+    ai_backend_bridge_install();
+    CHECK(nexora_backend_get() != NULL);
+}
+
 int main(void) {
     printf("TAP version 13\n");
     test_tensor_accounting();
@@ -351,6 +396,7 @@ int main(void) {
     test_frame_allocator_churn();
     test_slab_tensor_churn();
     test_slab_work_node_churn();
+    test_idt_and_privilege_boundary();
     printf("1..%u\n", tests_run);
     printf("Phase 14 host verification: %s (%u/%u passed)\n",
            tests_failed == 0 ? "PASS" : "FAIL",
