@@ -765,10 +765,3 @@ An interactive documentation suite and real-time state machine simulator is avai
 * **Architecture Overview:** Interactive breakdown of the 8 core primitives, dual planes, and research roadmap.
 * **Boot State-Machine Simulator:** Interactive visual simulator modeling long-mode setup, privilege transitions, and syscall round-trips.
 
----
-
-## 👤 Maintainer & Author
-
-* **abusuraihsakhri**  
-  * GitHub: [@abusuraihsakhri](https://github.com/abusuraihsakhri)  
-  * Email: [abusuraihsakhri@gmail.com](mailto:abusuraihsakhri@gmail.com)
