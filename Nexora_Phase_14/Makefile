@@ -33,6 +33,7 @@ C_SOURCES := \
 	src/kernel/panic.c \
 	src/mm/bump.c \
 	src/mm/frame.c \
+	src/mm/slab.c \
 	$(AI_SOURCES)
 
 ASM_SOURCES := src/arch/x86_64/boot.S
@@ -45,6 +46,7 @@ HOST_TEST_SOURCES := \
 	tests/host_panic.c \
 	src/mm/bump.c \
 	src/mm/frame.c \
+	src/mm/slab.c \
 	$(AI_SOURCES)
 
 HOST_REPORT_SOURCES := \
@@ -52,6 +54,7 @@ HOST_REPORT_SOURCES := \
 	tests/host_panic.c \
 	src/mm/bump.c \
 	src/mm/frame.c \
+	src/mm/slab.c \
 	$(AI_SOURCES)
 
 .PHONY: all clean run debug check test-host phase14-report verify-phase14

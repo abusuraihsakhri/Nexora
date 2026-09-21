@@ -1,5 +1,6 @@
 #include <ai/work.h>
 #include <kernel/memory.h>
+#include <kernel/slab.h>
 #include <kernel/panic.h>
 
 void ai_work_graph_init(ai_work_graph *graph) {
@@ -26,7 +27,12 @@ i32 ai_work_add_safe(
     if (graph->node_count >= AI_MAX_WORK_NODES) return -3;
     if (device_mask == 0) return -4;
 
-    ai_work_node *node = (ai_work_node *)kalloc(sizeof(ai_work_node), 16);
+    ai_work_node *node = NULL;
+    if (ai_work_node_cache) {
+        node = (ai_work_node *)kmem_cache_alloc(ai_work_node_cache);
+    } else {
+        node = (ai_work_node *)kalloc(sizeof(ai_work_node), 16);
+    }
     if (!node) return -5;
 
     node->id = graph->next_id++;
@@ -280,4 +286,35 @@ const char *ai_op_name(ai_op op) {
         case AI_OP_CUSTOM: return "CUSTOM";
         default: return "UNKNOWN";
     }
+}
+
+void ai_work_node_destroy(ai_work_graph *graph, ai_work_node *node) {
+    if (!node) return;
+    if (graph) {
+        for (u32 i = 0; i < graph->node_count; ++i) {
+            if (graph->nodes[i] == node) {
+                for (u32 j = i; j + 1 < graph->node_count; ++j) {
+                    graph->nodes[j] = graph->nodes[j + 1];
+                }
+                graph->nodes[--graph->node_count] = NULL;
+                break;
+            }
+        }
+    }
+    if (ai_work_node_cache) {
+        kmem_cache_free(ai_work_node_cache, node);
+    }
+}
+
+void ai_work_graph_destroy(ai_work_graph *graph) {
+    if (!graph) return;
+    for (u32 i = 0; i < graph->node_count; ++i) {
+        if (graph->nodes[i]) {
+            if (ai_work_node_cache) {
+                kmem_cache_free(ai_work_node_cache, graph->nodes[i]);
+            }
+            graph->nodes[i] = NULL;
+        }
+    }
+    graph->node_count = 0;
 }

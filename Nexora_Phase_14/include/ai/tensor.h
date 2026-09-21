@@ -64,6 +64,7 @@ u64 ai_tensor_count(void);
 u64 ai_tensor_total_bytes(void);
 u64 ai_tensor_bytes_at_location(ai_tensor_location location);
 bool ai_tensor_validate(const ai_tensor *tensor);
+void ai_tensor_destroy(ai_tensor *t);
 const char *ai_dtype_name(ai_dtype dtype);
 const char *ai_location_name(ai_tensor_location location);
 

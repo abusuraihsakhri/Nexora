@@ -1,5 +1,6 @@
 #include <ai/tensor.h>
 #include <kernel/memory.h>
+#include <kernel/slab.h>
 #include <kernel/panic.h>
 
 static ai_tensor *registry[AI_MAX_TENSORS];
@@ -73,7 +74,12 @@ i32 ai_tensor_create_safe(
         return -9;
     }
 
-    ai_tensor *t = (ai_tensor *)kalloc(sizeof(ai_tensor), 16);
+    ai_tensor *t = NULL;
+    if (ai_tensor_cache) {
+        t = (ai_tensor *)kmem_cache_alloc(ai_tensor_cache);
+    } else {
+        t = (ai_tensor *)kalloc(sizeof(ai_tensor), 16);
+    }
     if (!t) return -10;
 
     t->id = next_id++;
@@ -136,6 +142,36 @@ bool ai_tensor_validate(const ai_tensor *tensor) {
         if (tensor->shape[i] == 0) return false;
     }
     return true;
+}
+
+void ai_tensor_destroy(ai_tensor *t) {
+    if (!t) return;
+
+    for (u64 i = 0; i < count; ++i) {
+        if (registry[i] == t) {
+            if (total_bytes >= t->bytes) {
+                total_bytes -= t->bytes;
+            } else {
+                total_bytes = 0;
+            }
+            if ((u32)t->location <= (u32)AI_LOC_REMOTE) {
+                if (bytes_by_location[(u32)t->location] >= t->bytes) {
+                    bytes_by_location[(u32)t->location] -= t->bytes;
+                } else {
+                    bytes_by_location[(u32)t->location] = 0;
+                }
+            }
+            for (u64 j = i; j + 1 < count; ++j) {
+                registry[j] = registry[j + 1];
+            }
+            registry[--count] = NULL;
+            break;
+        }
+    }
+
+    if (ai_tensor_cache) {
+        kmem_cache_free(ai_tensor_cache, t);
+    }
 }
 
 const char *ai_dtype_name(ai_dtype dtype) {

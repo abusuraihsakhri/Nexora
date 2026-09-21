@@ -7,6 +7,7 @@
 #include <ai/work.h>
 #include <kernel/memory.h>
 #include <kernel/frame.h>
+#include <kernel/slab.h>
 
 static unsigned tests_run = 0;
 static unsigned tests_failed = 0;
@@ -232,8 +233,10 @@ static void test_malformed_ai_input_fuzz(void) {
     CHECK(ai_work_add_output_safe(node, NULL) != 0);
 }
 
+static u8 g_test_frame_pool[1024 * 4096] __attribute__((aligned(4096)));
+
 static void test_frame_allocator_churn(void) {
-    frame_init(0x1000000, 1024);
+    frame_init((uintptr_t)g_test_frame_pool, 1024);
     CHECK(frame_total_count() == 1024);
     CHECK(frame_free_count() == 1024);
 
@@ -260,6 +263,80 @@ static void test_frame_allocator_churn(void) {
     CHECK(frame_free_count() == 1024);
 }
 
+static void test_slab_tensor_churn(void) {
+    frame_init((uintptr_t)g_test_frame_pool, 1024);
+    slab_init();
+    ai_tensor_system_init();
+
+    CHECK(ai_tensor_cache != NULL);
+    CHECK(ai_work_node_cache != NULL);
+
+    usize initial_frames = kmem_cache_total_frames(ai_tensor_cache);
+    CHECK(initial_frames == 0);
+
+    const u64 shape[2] = {16, 16};
+    bool churn_ok = true;
+
+    /* Create and destroy 10,000 tensors */
+    for (unsigned cycle = 0; cycle < 10000; ++cycle) {
+        ai_tensor *t = NULL;
+        i32 rc = ai_tensor_create_safe("churn_t", AI_DTYPE_F32, 2, shape, AI_LOC_CPU_RAM, 0, &t);
+        if (rc != 0 || t == NULL) {
+            churn_ok = false;
+            break;
+        }
+        if (ai_tensor_count() != 1) {
+            churn_ok = false;
+            break;
+        }
+        ai_tensor_destroy(t);
+        if (ai_tensor_count() != 0) {
+            churn_ok = false;
+            break;
+        }
+    }
+    CHECK(churn_ok);
+
+    /* High-water mark stays bounded at exactly 1 object */
+    usize hw = kmem_cache_high_watermark(ai_tensor_cache);
+    CHECK(hw == 1);
+
+    /* Total frames allocated stays bounded (only 1 4KiB page instead of monotonically growing) */
+    usize tf = kmem_cache_total_frames(ai_tensor_cache);
+    CHECK(tf == 1);
+    CHECK(kmem_cache_allocated_objects(ai_tensor_cache) == 0);
+    CHECK(ai_tensor_total_bytes() == 0);
+}
+
+static void test_slab_work_node_churn(void) {
+    ai_work_graph graph;
+    ai_work_graph_init(&graph);
+    bool work_churn_ok = true;
+
+    /* Create and destroy 1,000 work nodes */
+    for (unsigned cycle = 0; cycle < 1000; ++cycle) {
+        ai_work_node *node = NULL;
+        i32 rc = ai_work_add_safe(&graph, "churn_node", AI_OP_NOOP, 1, 100, AI_DEVICE_CPU, &node);
+        if (rc != 0 || node == NULL) {
+            work_churn_ok = false;
+            break;
+        }
+        if (graph.node_count != 1) {
+            work_churn_ok = false;
+            break;
+        }
+        ai_work_node_destroy(&graph, node);
+        if (graph.node_count != 0) {
+            work_churn_ok = false;
+            break;
+        }
+    }
+    CHECK(work_churn_ok);
+    CHECK(kmem_cache_high_watermark(ai_work_node_cache) == 1);
+    CHECK(kmem_cache_total_frames(ai_work_node_cache) == 1);
+    CHECK(kmem_cache_allocated_objects(ai_work_node_cache) == 0);
+}
+
 int main(void) {
     printf("TAP version 13\n");
     test_tensor_accounting();
@@ -272,6 +349,8 @@ int main(void) {
     test_phase14_suite();
     test_malformed_ai_input_fuzz();
     test_frame_allocator_churn();
+    test_slab_tensor_churn();
+    test_slab_work_node_churn();
     printf("1..%u\n", tests_run);
     printf("Phase 14 host verification: %s (%u/%u passed)\n",
            tests_failed == 0 ? "PASS" : "FAIL",

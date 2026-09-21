@@ -102,6 +102,8 @@ bool ai_work_dependencies_done(const ai_work_graph *graph, const ai_work_node *n
 void ai_work_refresh_states(ai_work_graph *graph);
 bool ai_work_graph_validate(const ai_work_graph *graph, ai_graph_validation *result);
 u32 ai_work_graph_done_count(const ai_work_graph *graph);
+void ai_work_node_destroy(ai_work_graph *graph, ai_work_node *node);
+void ai_work_graph_destroy(ai_work_graph *graph);
 const char *ai_work_state_name(ai_work_state state);
 const char *ai_op_name(ai_op op);
 
