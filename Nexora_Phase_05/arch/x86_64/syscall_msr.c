@@ -5,6 +5,7 @@
 #define IA32_STAR   0xC0000081u
 #define IA32_LSTAR  0xC0000082u
 #define IA32_FMASK  0xC0000084u
+#define IA32_KERNEL_GS_BASE 0xC0000102u
 #define EFER_SCE    (1ull << 0)
 
 extern void nexora_syscall_entry(void);
@@ -23,6 +24,7 @@ static void wrmsr(uint32_t msr, uint64_t value) {
 
 void nexora_x86_syscall_init(uintptr_t kernel_stack_top) {
     uintptr_t aligned_stack_top = kernel_stack_top & ~(uintptr_t)0xFull;
+    nexora_percpu_init(&nexora_bsp_percpu, 0, aligned_stack_top);
     nexora_syscall_kernel_rsp = aligned_stack_top;
     nexora_x86_set_kernel_stack(aligned_stack_top);
 
@@ -37,6 +39,9 @@ void nexora_x86_syscall_init(uintptr_t kernel_stack_top) {
                     ((uint64_t)NEXORA_GDT_KERNEL_CODE << 32u);
     wrmsr(IA32_STAR, star);
     wrmsr(IA32_LSTAR, (uint64_t)(uintptr_t)&nexora_syscall_entry);
+
+    /* Program KERNEL_GS_BASE so swapgs maps %gs to per-CPU data */
+    wrmsr(IA32_KERNEL_GS_BASE, (uint64_t)(uintptr_t)&nexora_bsp_percpu);
 
     /* Clear IF, TF, DF and AC while in the kernel. */
     wrmsr(IA32_FMASK, (1ull << 9) | (1ull << 8) | (1ull << 10) | (1ull << 18));

@@ -5,11 +5,14 @@
 #include <nexora/syscall.h>
 #include <nexora/elf64.h>
 #include <nexora/uaccess.h>
+#include <nexora/x86_64.h>
 #include "mock_backend.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+struct nexora_percpu nexora_bsp_percpu;
 
 #define ASSERT_EQ(actual, expected) do { \
     long long _a = (long long)(actual); \
@@ -570,6 +573,37 @@ static void test_capability_delegation_rejects_unrelated_process(void) {
     (void)nexora_process_unregister(&p3);
 }
 
+static void test_percpu_stack_reentrancy_isolation(void) {
+    reset_runtime();
+    struct nexora_percpu cpu;
+    nexora_percpu_init(&cpu, 0, 0x10000ull);
+    ASSERT_EQ(cpu.kernel_rsp, 0x10000ull);
+    ASSERT_EQ(cpu.user_rsp, 0ull);
+    ASSERT_EQ(cpu.nest_depth, 0u);
+
+    /* Thread syscall entry: user rsp = 0x5000 */
+    ASSERT_EQ(nexora_percpu_push_user_rsp(&cpu, 0x5000ull), 0);
+    ASSERT_EQ(cpu.user_rsp, 0x5000ull);
+    ASSERT_EQ(cpu.nest_depth, 1u);
+
+    /* Simulated interrupt / nested syscall re-entering same CPU: user rsp = 0x6000 */
+    ASSERT_EQ(nexora_percpu_push_user_rsp(&cpu, 0x6000ull), 0);
+    ASSERT_EQ(cpu.user_rsp, 0x6000ull);
+    ASSERT_EQ(cpu.nest_depth, 2u);
+
+    /* Return from nested syscall: pops 0x6000, restores 0x5000 */
+    uint64_t popped1 = nexora_percpu_pop_user_rsp(&cpu);
+    ASSERT_EQ(popped1, 0x6000ull);
+    ASSERT_EQ(cpu.user_rsp, 0x5000ull);
+    ASSERT_EQ(cpu.nest_depth, 1u);
+
+    /* Return from thread syscall: pops 0x5000, restores 0 */
+    uint64_t popped2 = nexora_percpu_pop_user_rsp(&cpu);
+    ASSERT_EQ(popped2, 0x5000ull);
+    ASSERT_EQ(cpu.user_rsp, 0ull);
+    ASSERT_EQ(cpu.nest_depth, 0u);
+}
+
 int main(void) {
     test_abi_query();
     test_abi_query_without_backend();
@@ -594,6 +628,7 @@ int main(void) {
     test_elf_loader_rejects_nonexec_entry();
     test_elf_loader_rejects_overlapping_segments();
     test_syscall_return_frame_rejects_non_canonical_rip();
-    puts("Phase 5 host tests: PASS (23 test groups)");
+    test_percpu_stack_reentrancy_isolation();
+    puts("Phase 5 host tests: PASS (24 test groups)");
     return 0;
 }

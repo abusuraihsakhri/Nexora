@@ -1,6 +1,7 @@
 .section .text
 .code64
 .global nexora_syscall_entry
+.global nexora_bsp_percpu
 .global nexora_syscall_kernel_rsp
 .global nexora_syscall_user_rsp
 .extern nexora_syscall_dispatch_frame
@@ -12,13 +13,14 @@
  *   rdi,rsi,rdx,r10,r8,r9 = arguments 0..5
  *   rax = signed result
  *
- * This bootstrap path uses one kernel stack pointer. It must be replaced by
- * per-CPU storage before concurrent SMP userspace is enabled.
+ * Utilizes swapgs to address per-CPU stack storage via the %gs segment:
+ *   %gs:0 = kernel_rsp
+ *   %gs:8 = user_rsp
  */
 nexora_syscall_entry:
     swapgs
-    movq %rsp, nexora_syscall_user_rsp(%rip)
-    movq nexora_syscall_kernel_rsp(%rip), %rsp
+    movq %rsp, %gs:8
+    movq %gs:0, %rsp
 
     /* Build struct nexora_syscall_frame in reverse order. */
     pushq %rcx
@@ -63,7 +65,7 @@ nexora_syscall_entry:
     movq 56(%rsp), %r11
     addq $72, %rsp
 
-    movq nexora_syscall_user_rsp(%rip), %rsp
+    movq %gs:8, %rsp
     swapgs
     sysretq
 
@@ -77,9 +79,13 @@ nexora_syscall_entry:
     hlt
     jmp 1b
 
-.section .bss
-.align 8
+.section .data
+.align 16
+nexora_bsp_percpu:
 nexora_syscall_kernel_rsp:
     .quad 0
 nexora_syscall_user_rsp:
     .quad 0
+    .long 0
+    .long 0
+    .quad 0, 0, 0, 0
