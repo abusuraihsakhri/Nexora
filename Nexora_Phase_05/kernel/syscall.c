@@ -345,3 +345,12 @@ void nexora_syscall_dispatch_frame(struct nexora_syscall_frame *frame) {
     frame->rax = (uint64_t)nexora_syscall_dispatch(frame->rax, frame->rdi, frame->rsi,
                                                    frame->rdx, frame->r10, frame->r8, frame->r9);
 }
+
+void nexora_syscall_bad_rip_fault(struct nexora_syscall_frame *frame) {
+    (void)frame;
+    struct nexora_process *process = current_process;
+    if (process) {
+        process->alive = false;
+        nexora_syscall_process_cleanup(process);
+    }
+}

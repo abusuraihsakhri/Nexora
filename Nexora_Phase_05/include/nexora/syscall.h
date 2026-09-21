@@ -29,5 +29,10 @@ nexora_status_t nexora_syscall_dispatch(uint64_t number,
                                         uint64_t a4,
                                         uint64_t a5);
 void nexora_syscall_dispatch_frame(struct nexora_syscall_frame *frame);
+void nexora_syscall_bad_rip_fault(struct nexora_syscall_frame *frame);
+
+static inline bool nexora_is_canonical_user_rip(uint64_t rip) {
+    return (rip >> 47) == 0;
+}
 
 #endif

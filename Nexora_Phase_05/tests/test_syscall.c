@@ -473,6 +473,39 @@ static void test_uaccess_unmapped_page_fault_fixup(void) {
     nexora_uaccess_set_fault_probe(NULL);
 }
 
+static void test_syscall_return_frame_rejects_non_canonical_rip(void) {
+    reset_runtime();
+    nexora_syscall_set_current_process(&p1);
+
+    /* Valid lower-canonical user pointers */
+    ASSERT_TRUE(nexora_is_canonical_user_rip(0x0000000000400000ull));
+    ASSERT_TRUE(nexora_is_canonical_user_rip(0x00007fffffffffffull));
+
+    /* Non-canonical addresses */
+    ASSERT_TRUE(!nexora_is_canonical_user_rip(0x0000800000000000ull));
+    ASSERT_TRUE(!nexora_is_canonical_user_rip(0x8000000000000000ull));
+
+    /* High-half kernel addresses (forbidden for user sysret) */
+    ASSERT_TRUE(!nexora_is_canonical_user_rip(0xffffffff80000000ull));
+    ASSERT_TRUE(!nexora_is_canonical_user_rip(0xffffffffffffffffull));
+
+    /* Craft a syscall return frame with a non-canonical RIP */
+    struct nexora_syscall_frame frame = {
+        .r9 = 0, .r8 = 0, .r10 = 0, .rdx = 0,
+        .rsi = 0, .rdi = 0, .rax = 0,
+        .user_rflags = 0x202,
+        .user_rip = 0x8000000000000000ull
+    };
+    ASSERT_TRUE(!nexora_is_canonical_user_rip(frame.user_rip));
+
+    /* Fault path terminates the offending process safely without executing sysret */
+    ASSERT_TRUE(p1.alive);
+    nexora_syscall_bad_rip_fault(&frame);
+    ASSERT_TRUE(!p1.alive);
+
+    nexora_syscall_set_current_process(NULL);
+}
+
 int main(void) {
     test_abi_query();
     test_abi_query_without_backend();
@@ -494,6 +527,7 @@ int main(void) {
     test_elf_loader_validates_and_maps();
     test_elf_loader_rejects_wx();
     test_elf_loader_rejects_nonexec_entry();
-    puts("Phase 5 host tests: PASS (20 test groups)");
+    test_syscall_return_frame_rejects_non_canonical_rip();
+    puts("Phase 5 host tests: PASS (21 test groups)");
     return 0;
 }

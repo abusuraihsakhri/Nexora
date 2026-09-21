@@ -4,6 +4,7 @@
 .global nexora_syscall_kernel_rsp
 .global nexora_syscall_user_rsp
 .extern nexora_syscall_dispatch_frame
+.extern nexora_syscall_bad_rip_fault
 
 /*
  * Nexora x86-64 syscall ABI:
@@ -37,6 +38,17 @@ nexora_syscall_entry:
     addq $8, %rsp
 
     /*
+     * Security check: Return RIP (at 64(%rsp)) must be a canonical user address.
+     * On Intel CPUs, executing SYSRET with a non-canonical RCX causes a #GP
+     * fault in Ring 0 with user stack/state (CVE-2012-0217).
+     * Lower half canonical user space requires bits 47..63 to be 0.
+     */
+    movq 64(%rsp), %rcx
+    movq %rcx, %rax
+    shrq $47, %rax
+    jnz .Lsyscall_sysret_non_canonical
+
+    /*
      * Preserve all syscall argument registers across the transition.  The
      * userspace wrapper only declares RCX/R11 as architectural clobbers, so
      * returning the argument registers prevents a compiler/kernel ABI mismatch.
@@ -49,12 +61,21 @@ nexora_syscall_entry:
     movq 40(%rsp), %rdi
     movq 48(%rsp), %rax
     movq 56(%rsp), %r11
-    movq 64(%rsp), %rcx
     addq $72, %rsp
 
     movq nexora_syscall_user_rsp(%rip), %rsp
     swapgs
     sysretq
+
+.Lsyscall_sysret_non_canonical:
+    /* Keep frame on stack and invoke safe kernel fault handler */
+    movq %rsp, %rdi
+    subq $8, %rsp
+    call nexora_syscall_bad_rip_fault
+    addq $8, %rsp
+1:
+    hlt
+    jmp 1b
 
 .section .bss
 .align 8
