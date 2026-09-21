@@ -71,6 +71,16 @@ typedef struct {
 
 void ai_work_graph_init(ai_work_graph *graph);
 
+i32 ai_work_add_safe(
+    ai_work_graph *graph,
+    const char *name,
+    ai_op op,
+    u32 priority,
+    u64 deadline_ns,
+    u32 device_mask,
+    ai_work_node **out_node
+);
+
 ai_work_node *ai_work_add(
     ai_work_graph *graph,
     const char *name,
@@ -79,6 +89,10 @@ ai_work_node *ai_work_add(
     u64 deadline_ns,
     u32 device_mask
 );
+
+i32 ai_work_add_dependency_safe(ai_work_node *node, u64 dependency_id);
+i32 ai_work_add_input_safe(ai_work_node *node, ai_tensor *tensor);
+i32 ai_work_add_output_safe(ai_work_node *node, ai_tensor *tensor);
 
 void ai_work_add_dependency(ai_work_node *node, u64 dependency_id);
 void ai_work_add_input(ai_work_node *node, ai_tensor *tensor);

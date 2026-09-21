@@ -39,6 +39,63 @@ void ai_tensor_system_init(void) {
     }
 }
 
+i32 ai_tensor_create_safe(
+    const char *name,
+    ai_dtype dtype,
+    u32 ndim,
+    const u64 *shape,
+    ai_tensor_location location,
+    u32 flags,
+    ai_tensor **out_tensor
+) {
+    if (!out_tensor) return -1;
+    *out_tensor = NULL;
+
+    if (count >= AI_MAX_TENSORS) return -2;
+    if (!name || !shape) return -3;
+    if (ndim == 0 || ndim > AI_MAX_DIMS) return -4;
+    if (dtype_size(dtype) == 0) return -5;
+    if ((u32)location > (u32)AI_LOC_REMOTE) return -6;
+
+    u64 elements = 1;
+    for (u32 i = 0; i < ndim; ++i) {
+        if (shape[i] == 0) return -7;
+        if (!multiply_u64_checked(elements, shape[i], &elements)) {
+            return -8;
+        }
+    }
+
+    u64 bytes = 0;
+    if (!multiply_u64_checked(elements, dtype_size(dtype), &bytes)) {
+        return -8;
+    }
+    if (total_bytes > (~0ull) - bytes) {
+        return -9;
+    }
+
+    ai_tensor *t = (ai_tensor *)kalloc(sizeof(ai_tensor), 16);
+    if (!t) return -10;
+
+    t->id = next_id++;
+    t->name = name;
+    t->dtype = dtype;
+    t->ndim = ndim;
+    t->location = location;
+    t->flags = flags;
+    t->reuse_hint = 0;
+    t->bytes = bytes;
+
+    for (u32 i = 0; i < AI_MAX_DIMS; ++i) {
+        t->shape[i] = (i < ndim) ? shape[i] : 0;
+    }
+
+    total_bytes += bytes;
+    bytes_by_location[(u32)location] += bytes;
+    registry[count++] = t;
+    *out_tensor = t;
+    return 0;
+}
+
 ai_tensor *ai_tensor_create(
     const char *name,
     ai_dtype dtype,
@@ -47,55 +104,11 @@ ai_tensor *ai_tensor_create(
     ai_tensor_location location,
     u32 flags
 ) {
-    if (count >= AI_MAX_TENSORS) {
-        panic("tensor registry full");
+    ai_tensor *t = NULL;
+    i32 rc = ai_tensor_create_safe(name, dtype, ndim, shape, location, flags, &t);
+    if (rc != 0) {
+        panic("ai_tensor_create: invalid argument or resource exhaustion");
     }
-    if (!name || !shape) {
-        panic("tensor name/shape must not be null");
-    }
-    if (ndim == 0 || ndim > AI_MAX_DIMS) {
-        panic("invalid tensor rank");
-    }
-    if (dtype_size(dtype) == 0) {
-        panic("invalid tensor dtype");
-    }
-    if ((u32)location > (u32)AI_LOC_REMOTE) {
-        panic("invalid tensor location");
-    }
-
-    ai_tensor *t = (ai_tensor *)kalloc(sizeof(ai_tensor), 16);
-    t->id = next_id++;
-    t->name = name;
-    t->dtype = dtype;
-    t->ndim = ndim;
-    t->location = location;
-    t->flags = flags;
-    t->reuse_hint = 0;
-
-    u64 elements = 1;
-    for (u32 i = 0; i < AI_MAX_DIMS; ++i) {
-        t->shape[i] = 0;
-    }
-    for (u32 i = 0; i < ndim; ++i) {
-        if (shape[i] == 0) {
-            panic("tensor dimensions must be non-zero");
-        }
-        t->shape[i] = shape[i];
-        if (!multiply_u64_checked(elements, shape[i], &elements)) {
-            panic("tensor element count overflow");
-        }
-    }
-
-    if (!multiply_u64_checked(elements, dtype_size(dtype), &t->bytes)) {
-        panic("tensor byte size overflow");
-    }
-    if (total_bytes > (~0ull) - t->bytes) {
-        panic("tensor byte accounting overflow");
-    }
-
-    total_bytes += t->bytes;
-    bytes_by_location[(u32)location] += t->bytes;
-    registry[count++] = t;
     return t;
 }
 

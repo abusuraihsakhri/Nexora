@@ -11,25 +11,24 @@ void ai_work_graph_init(ai_work_graph *graph) {
     }
 }
 
-ai_work_node *ai_work_add(
+i32 ai_work_add_safe(
     ai_work_graph *graph,
     const char *name,
     ai_op op,
     u32 priority,
     u64 deadline_ns,
-    u32 device_mask
+    u32 device_mask,
+    ai_work_node **out_node
 ) {
-    if (!graph || !name) {
-        panic("invalid work node arguments");
-    }
-    if (graph->node_count >= AI_MAX_WORK_NODES) {
-        panic("work graph full");
-    }
-    if (device_mask == 0) {
-        panic("work node requires a device mask");
-    }
+    if (!out_node) return -1;
+    *out_node = NULL;
+    if (!graph || !name) return -2;
+    if (graph->node_count >= AI_MAX_WORK_NODES) return -3;
+    if (device_mask == 0) return -4;
 
     ai_work_node *node = (ai_work_node *)kalloc(sizeof(ai_work_node), 16);
+    if (!node) return -5;
+
     node->id = graph->next_id++;
     node->name = name;
     node->op = op;
@@ -46,37 +45,63 @@ ai_work_node *ai_work_add(
     for (u32 i = 0; i < AI_MAX_OUTPUTS; ++i) node->outputs[i] = NULL;
 
     graph->nodes[graph->node_count++] = node;
+    *out_node = node;
+    return 0;
+}
+
+ai_work_node *ai_work_add(
+    ai_work_graph *graph,
+    const char *name,
+    ai_op op,
+    u32 priority,
+    u64 deadline_ns,
+    u32 device_mask
+) {
+    ai_work_node *node = NULL;
+    i32 rc = ai_work_add_safe(graph, name, op, priority, deadline_ns, device_mask, &node);
+    if (rc != 0) {
+        panic("ai_work_add: invalid argument or capacity exceeded");
+    }
     return node;
 }
 
-void ai_work_add_dependency(ai_work_node *node, u64 dependency_id) {
-    if (!node || dependency_id == 0) {
-        panic("invalid work dependency");
-    }
-    if (node->dependency_count >= AI_MAX_DEPS) {
-        panic("too many work dependencies");
-    }
+i32 ai_work_add_dependency_safe(ai_work_node *node, u64 dependency_id) {
+    if (!node || dependency_id == 0) return -1;
+    if (node->dependency_count >= AI_MAX_DEPS) return -2;
     node->dependencies[node->dependency_count++] = dependency_id;
+    return 0;
+}
+
+void ai_work_add_dependency(ai_work_node *node, u64 dependency_id) {
+    if (ai_work_add_dependency_safe(node, dependency_id) != 0) {
+        panic("ai_work_add_dependency failed");
+    }
+}
+
+i32 ai_work_add_input_safe(ai_work_node *node, ai_tensor *tensor) {
+    if (!node || !tensor) return -1;
+    if (node->input_count >= AI_MAX_INPUTS) return -2;
+    node->inputs[node->input_count++] = tensor;
+    return 0;
 }
 
 void ai_work_add_input(ai_work_node *node, ai_tensor *tensor) {
-    if (!node || !tensor) {
-        panic("invalid work input");
+    if (ai_work_add_input_safe(node, tensor) != 0) {
+        panic("ai_work_add_input failed");
     }
-    if (node->input_count >= AI_MAX_INPUTS) {
-        panic("too many work inputs");
-    }
-    node->inputs[node->input_count++] = tensor;
+}
+
+i32 ai_work_add_output_safe(ai_work_node *node, ai_tensor *tensor) {
+    if (!node || !tensor) return -1;
+    if (node->output_count >= AI_MAX_OUTPUTS) return -2;
+    node->outputs[node->output_count++] = tensor;
+    return 0;
 }
 
 void ai_work_add_output(ai_work_node *node, ai_tensor *tensor) {
-    if (!node || !tensor) {
-        panic("invalid work output");
+    if (ai_work_add_output_safe(node, tensor) != 0) {
+        panic("ai_work_add_output failed");
     }
-    if (node->output_count >= AI_MAX_OUTPUTS) {
-        panic("too many work outputs");
-    }
-    node->outputs[node->output_count++] = tensor;
 }
 
 static const ai_work_node *find_node(const ai_work_graph *graph, u64 id) {

@@ -43,6 +43,15 @@ typedef struct {
 } ai_tensor;
 
 void ai_tensor_system_init(void);
+i32 ai_tensor_create_safe(
+    const char *name,
+    ai_dtype dtype,
+    u32 ndim,
+    const u64 *shape,
+    ai_tensor_location location,
+    u32 flags,
+    ai_tensor **out_tensor
+);
 ai_tensor *ai_tensor_create(
     const char *name,
     ai_dtype dtype,

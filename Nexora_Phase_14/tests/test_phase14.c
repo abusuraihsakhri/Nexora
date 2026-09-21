@@ -179,6 +179,58 @@ static void test_phase14_suite(void) {
     CHECK(report.heap_after < early_heap_capacity());
 }
 
+static void test_malformed_ai_input_fuzz(void) {
+    reset_runtime();
+    ai_tensor *t = NULL;
+    u64 shape[2] = {4, 8};
+
+    CHECK(ai_tensor_create_safe(NULL, AI_DTYPE_F32, 2, shape, AI_LOC_CPU_RAM, 0, &t) != 0);
+    CHECK(t == NULL);
+
+    CHECK(ai_tensor_create_safe("t", AI_DTYPE_F32, 2, NULL, AI_LOC_CPU_RAM, 0, &t) != 0);
+    CHECK(t == NULL);
+
+    CHECK(ai_tensor_create_safe("t", AI_DTYPE_F32, 0, shape, AI_LOC_CPU_RAM, 0, &t) != 0);
+    CHECK(t == NULL);
+
+    CHECK(ai_tensor_create_safe("t", AI_DTYPE_F32, AI_MAX_DIMS + 1, shape, AI_LOC_CPU_RAM, 0, &t) != 0);
+    CHECK(t == NULL);
+
+    CHECK(ai_tensor_create_safe("t", (ai_dtype)999, 2, shape, AI_LOC_CPU_RAM, 0, &t) != 0);
+    CHECK(t == NULL);
+
+    u64 zero_shape[2] = {4, 0};
+    CHECK(ai_tensor_create_safe("t", AI_DTYPE_F32, 2, zero_shape, AI_LOC_CPU_RAM, 0, &t) != 0);
+    CHECK(t == NULL);
+
+    u64 huge_shape[2] = {~0ull, ~0ull};
+    CHECK(ai_tensor_create_safe("t", AI_DTYPE_F32, 2, huge_shape, AI_LOC_CPU_RAM, 0, &t) != 0);
+    CHECK(t == NULL);
+
+    CHECK(ai_tensor_create_safe("t", AI_DTYPE_F32, 2, shape, (ai_tensor_location)999, 0, &t) != 0);
+    CHECK(t == NULL);
+
+    ai_work_graph graph;
+    ai_work_graph_init(&graph);
+    ai_work_node *node = NULL;
+
+    CHECK(ai_work_add_safe(NULL, "node", AI_OP_NOOP, 1, 100, AI_DEVICE_CPU, &node) != 0);
+    CHECK(node == NULL);
+
+    CHECK(ai_work_add_safe(&graph, NULL, AI_OP_NOOP, 1, 100, AI_DEVICE_CPU, &node) != 0);
+    CHECK(node == NULL);
+
+    CHECK(ai_work_add_safe(&graph, "node", AI_OP_NOOP, 1, 100, 0, &node) != 0);
+    CHECK(node == NULL);
+
+    CHECK(ai_work_add_safe(&graph, "valid_node", AI_OP_NOOP, 1, 100, AI_DEVICE_CPU, &node) == 0);
+    CHECK(node != NULL);
+
+    CHECK(ai_work_add_dependency_safe(node, 0) != 0);
+    CHECK(ai_work_add_input_safe(node, NULL) != 0);
+    CHECK(ai_work_add_output_safe(node, NULL) != 0);
+}
+
 int main(void) {
     printf("TAP version 13\n");
     test_tensor_accounting();
@@ -189,6 +241,7 @@ int main(void) {
     test_memory_metrics();
     test_benchmark();
     test_phase14_suite();
+    test_malformed_ai_input_fuzz();
     printf("1..%u\n", tests_run);
     printf("Phase 14 host verification: %s (%u/%u passed)\n",
            tests_failed == 0 ? "PASS" : "FAIL",
