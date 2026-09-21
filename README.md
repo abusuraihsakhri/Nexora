@@ -1,204 +1,325 @@
-# Nexora Operating System
+# NEXORA
+
+## Neural EXecution Orchestration and Resource Architecture
 
 <div align="center">
 
-![Architecture](https://img.shields.io/badge/Architecture-x86__64-blue.svg?style=for-the-badge)
+![Architecture](https://img.shields.io/badge/Architecture-x86__64%20Microkernel-blue.svg?style=for-the-badge)
+![Specification](https://img.shields.io/badge/Spec-v0.1%20Research%20Draft-purple.svg?style=for-the-badge)
 ![Security Audit](https://img.shields.io/badge/OWASP%202025-100%25%20Remediated-brightgreen.svg?style=for-the-badge)
 ![Documentation](https://img.shields.io/badge/Docs-GitHub%20Pages-blueviolet.svg?style=for-the-badge)
 ![Privilege](https://img.shields.io/badge/Isolation-Ring%200%20%7C%20Ring%203-orange.svg?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey.svg?style=for-the-badge)
 
 <p align="center">
-  <b>A Secure, AI-Native x86_64 Microkernel with Capability-Based Security, Ring 3 Privilege Isolation, and Asynchronous Tensor Work Graph Scheduling.</b>
+  <b>An operating-system architecture in which AI workload semantics participate directly in resource management.</b>
 </p>
 
-[Interactive Docs & Boot Simulator](https://abusuraihsakhri.github.io/Nexora/) • [Architecture](#-architecture--subsystems) • [Security Audit](#-security-audit--owasp-2025-remediation-matrix) • [Kernel Unification](#-kernel-unification-milestones-m1m6) • [Building & Testing](#-building--testing)
+[Interactive Docs & Simulator](https://abusuraihsakhri.github.io/Nexora/) • [Executive Definition](#1-executive-definition) • [Core Primitives](#5-the-eight-core-nexora-primitives) • [Kernel Architecture](#6-kernel-architecture) • [Security Hardening](#12-security-audit--owasp-2025-remediation-matrix) • [Kernel Unification](#13-kernel-unification-milestones-m1m6) • [Building & Testing](#16-building--testing)
 
 </div>
 
 ---
 
-## 📖 Executive Summary
+# 1. Executive Definition
 
-**Nexora OS** is a modern x86_64 operating system designed from the ground up to unite low-level hardware virtualization, capability-based security, and high-throughput machine learning execution into a single, cohesive kernel architecture.
+**Nexora is an AI-native operating-system architecture designed around semantic knowledge of AI workloads rather than conventional process/page/device abstractions alone.**
 
-Unlike traditional monolithic kernels where AI acceleration operates strictly as an out-of-tree userspace driver, Nexora treats **n-dimensional tensors** and **directed acyclic work graphs (DAGs)** as fundamental kernel-managed abstractions alongside virtual memory and processes. 
+### Central Hypothesis
 
-The architecture guarantees strict **Ring 0 / Ring 3 hardware separation**, per-CPU re-entrant syscall handling, unforgeable capability tokens, dynamic slab reclamation, and zero-panic exception recovery with `.fixup_table` support.
+> *An operating system that understands computation graphs, tensor lifetimes, model state, accelerator requirements, topology, data locality, deadlines, and resource capabilities can manage AI workloads more efficiently than an operating system that sees primarily processes, virtual pages, files, and devices.*
 
----
+Nexora does **not** attempt to replace PyTorch, JAX, CUDA, ROCm, OpenXLA, Kubernetes, or existing model-serving frameworks initially. Instead, Nexora introduces an OS-level semantic resource-management layer underneath or alongside them:
 
-## 🏛️ Architecture & Subsystems
-
+```text
+               AI Applications / Agents
+                         │
+                  PyTorch / JAX
+                         │
+              Nexora Runtime Adapter
+                         │
+                  Nexora AI ABI
+                         │
+┌───────────────────────────────────────────────────┐
+│                 NEXORA KERNEL                     │
+│                                                   │
+│  Work Graph       Tensor/State       Capability   │
+│      │                 │                 │        │
+│      └────────────┬────┴──────────┬─────┘        │
+│                   │               │               │
+│            Global Scheduler    Placement          │
+│                   │               │               │
+│              Resource Fabric / Topology           │
+└───────────────────────┬───────────────────────────┘
+                        │
+          ┌─────────────┼──────────────┐
+          │             │              │
+         CPU           GPU            NPU
+          │             │              │
+         RAM           HBM         Accelerator RAM
+          │             │              │
+          └────── NVMe / NIC / Remote ─┘
 ```
-+---------------------------------------------------------------------------------------------------+
-|                                      NEXORA UNIFIED ARCHITECTURE                                   |
-+---------------------------------------------------------------------------------------------------+
-|  [ RING 3: USERSPACE & AI WORKERS ]                                                               |
-|  - Standalone ELF64 Execution Stubs                                                               |
-|  - User-level Tensor Allocators & Model Graph Invocations                                         |
-|  - Isolated Process Address Spaces with Capability Descriptors                                   |
-+-----------------------------------------|---------------------------------------------------------+
-                                          | SYSCALL / SYSRET (%rcx/%r11 canonical validation)
-                                          v
-+---------------------------------------------------------------------------------------------------+
-|  [ RING 0: KERNEL SUPERVISOR ]                                                                   |
-|                                                                                                   |
-|  +-----------------------------+  +-------------------------------+  +--------------------------+ |
-|  | Hardware & Privilege Subsys |  | Memory Management Subsystem   |  | AI Execution Engine      | |
-|  |-----------------------------|  |-------------------------------|  |--------------------------| |
-|  | - 64-bit GDT & TSS (RSP0)   |  | - Physical Frame Alloc (M1)   |  | - ai_tensor Subsystem    | |
-|  | - Hardware IDT & IST Stacks |  |   (Buddy / Bitmap Allocator)  |  | - ai_work_graph (DAG)    | |
-|  | - Per-CPU %gs Base Regs     |  | - Slab Cache & Object Pools   |  | - Multi-Priority Queue   | |
-|  | - .fixup_table Page Faults  |  |   (Tensor & Node Reclamation) |  | - Async Scheduler (M6)   | |
-|  +-----------------------------+  +-------------------------------+  +--------------------------+ |
-|                                                                                                   |
-|  +----------------------------------------------------------------------------------------------+ |
-|  | Capability Security & Access Control: Unforgeable Handle Tables & Parent Delegation Guard    | |
-|  +----------------------------------------------------------------------------------------------+ |
-+---------------------------------------------------------------------------------------------------+
+
+---
+
+# 2. Problem Statement & Information Gap
+
+Contemporary AI stacks cross multiple isolated abstraction layers:
+
+```text
+Model server knows:  requests, models, KV caches, batches
+Framework knows:     tensors, operation DAGs
+Compiler knows:      compiled kernels, inter-op dependencies
+GPU runtime knows:   hardware streams, command buffers
+Linux knows:         processes, threads, virtual pages, file descriptors
+Hardware knows:      execution queues, memory, execution units
 ```
 
-### 1. Privilege Boundaries & Hardware Isolation
-* **Ring 0 / Ring 3 Hardware Separation:** The kernel initializes a 64-bit Global Descriptor Table (GDT) and Task State Segment (TSS) providing dedicated `rsp0` kernel stack pointers for interrupts and exceptions.
-* **Fast System Calls:** Configures AMD/Intel MSRs (`IA32_STAR`, `IA32_LSTAR`, `IA32_FMASK`) for `syscall`/`sysretq` instruction round-trips.
-* **Per-CPU GS Segment Addressing:** User and kernel stack registers (`%rsp`) are isolated per physical core using `%gs` base offsets (`%gs:0` for kernel stack, `%gs:8` for user stack), preventing stack corruption under concurrent SMP execution or nested interrupt dispatch.
-* **Canonical RIP Validation:** Syscall return points are validated to guarantee the return instruction pointer lies strictly within canonical 48-bit userspace, averting kernel general protection faults (`#GP`).
-
-### 2. Dual-Tier Memory Management
-* **Physical Frame Allocator (Milestone M1):** Replaces early-stage monotonic bump allocators with a 4 KiB page frame management engine capable of handling high-frequency churn cycles across the full bootloader-provided memory map.
-* **Kernel Slab Allocator with Dynamic Reclamation (Milestone M2):** Implements dedicated object slab caches for high-churn kernel structures (`ai_tensor` and `ai_work_node`). Free slabs automatically release backing memory, bounding heap watermarks under intensive ML workloads.
-
-### 3. Fault-Tolerant Exception Handling & `.fixup_table`
-* **Zero-Panic User Access (`uaccess`):** Dereferencing user-supplied pointers from kernel mode (`nexora_copy_from_user` / `nexora_copy_to_user`) is guarded by kernel exception tables. If an unmapped or uncommitted page causes a Page Fault (`#PF`), the kernel fault handler catches the exception, rewinds execution to a registered fixup label, and returns `-EFAULT` cleanly.
-* **Comprehensive IDT Vectors:** Double-fault (#DF), General Protection Fault (#GP), and Page Fault (#PF) handlers are wired with dedicated Interrupt Stack Table (IST) entries.
-
-### 4. Asynchronous AI Tensor Work Graph Subsystem
-* **Tensor Objects:** Managed descriptors supporting arbitrary shapes, data types, and dimension constraints with strict input sanitization.
-* **Work Graph Directed Acyclic Graphs (DAGs):** Asynchronous execution graphs composed of interconnected work nodes.
-* **Async Queue Scheduler (Milestone M6):** Decoupled execution model supporting multi-priority queues (`PRIORITY_HIGH`, `PRIORITY_NORMAL`, `PRIORITY_LOW`), dependency resolution, and pluggable hardware compute backends.
-
-### 5. Capability-Based Security & ELF64 Loader
-* **Unforgeable Process Handle Table:** Resources (tensors, memory ranges, IPC endpoints) are referenced strictly via integer handles resolved against the calling process's capability table.
-* **Delegation Hierarchy:** `sys_cap_delegate` enforces strict relationship checks: capability transfers are permitted only between parent and child processes or verified IPC channels.
-* **Hardened ELF64 Loader:** Implements $O(N^2)$ pairwise segment overlap verification to reject malformed or malicious binaries attempting to alias readable/writable memory over executable code regions ($W \oplus X$ bypass prevention).
+No single layer possesses complete information about **what** is computed, **where** its data resides, **when** it will be reused, **which** accelerator should run it, **what** deadline applies, and **which** resource capabilities are authorized. Nexora exposes this semantic information directly to kernel resource managers.
 
 ---
 
-## 🛡️ Security Audit & OWASP 2025 Remediation Matrix
+# 3. Core Design Principles
 
-Nexora underwent a comprehensive, line-by-line static analysis and vulnerability audit evaluated against the **OWASP Top 10: 2025** threat model. All 7 identified architectural vulnerabilities have been remediated, verified, and backed by automated regression tests:
-
-| # | Vulnerability & Category | File Location | Root Cause & Security Breach | Remediation & Defensive Implementation | Test Verification |
-|---|--------------------------|---------------|------------------------------|-----------------------------------------|-------------------|
-| **1** | **SYSRET Non-Canonical Return RIP**<br>`A10:2025 - Mishandling of Exceptional Conditions` | `Nexora_Phase_05/arch/x86_64/syscall_entry.S` | Executing `sysretq` with a non-canonical RIP triggers a `#GP` in Ring 0 with user registers/stack active (CVE-2012-0217 class vulnerability). | Enforced canonical validation check on bits 47..63 before executing `sysretq`; malformed RIPs safely abort to kernel fault dispatch. | `test_syscall_return_frame_rejects_non_canonical_rip` (PASS) |
-| **2** | **Shared Global Syscall Stack in `.bss`**<br>`A06:2025 - Insecure Design` | `Nexora_Phase_05/arch/x86_64/syscall_entry.S` | User stack pointer was cached in singleton `.bss` memory. Re-entrancy, nested interrupts, or concurrent multicore syscalls clobbered active stacks. | Migrated user and kernel `%rsp` storage to per-CPU data structures addressed through `%gs:0` and `%gs:8`. | `test_percpu_stack_reentrancy_isolation` (PASS) |
-| **3** | **ELF Loader Overlapping PT_LOAD Segments**<br>`A08:2025 - Software and Data Integrity Failures` | `Nexora_Phase_05/kernel/elf64.c` | Loader verified $W \oplus X$ per-segment but failed to detect overlapping virtual intervals, permitting RW segments over RX code. | Implemented $O(N^2)$ pairwise interval overlap detection across all `PT_LOAD` segments before mapping. | `test_elf_loader_rejects_overlapping_segments` (PASS) |
-| **4** | **Unhandled Page Fault in `uaccess`**<br>`A10:2025 - Mishandling of Exceptional Conditions` | `Nexora_Phase_05/kernel/uaccess.c` | Raw byte copying of user pointers in Ring 0 caused immediate kernel panic if an address pointed to unmapped memory. | Integrated `.fixup_table` exception handling: faulting access safely redirects to fixup handler returning `-EFAULT`. | `test_uaccess_unmapped_page_fault_fixup` (PASS) |
-| **5** | **Kernel `panic()` on Malformed AI Object Input**<br>`A10:2025 - Mishandling of Exceptional Conditions` | `Nexora_Phase_14/src/ai/tensor.c`, `work.c` | Subsystem invoked unrecoverable `panic()` when encountering malformed ranks, null names, or invalid dimensions. | Replaced panics with structured error codes (`NEXORA_STATUS_INVALID_ARGUMENT`), returning graceful error statuses to callers. | `test_malformed_ai_input_fuzz` (87/87 TAP pass) |
-| **6** | **Non-IRQ-Safe Trace Ring Spinlock**<br>`A06:2025 - Insecure Design` | `Nexora_Phase_17/src/phase17/trace.c` | Writer spinlock was acquired without disabling local interrupts. An ISR re-entering the trace emit path would deadlock the CPU core. | Enclosed telemetry lock acquisition within `nx_irq_save_disable()` / `nx_irq_restore()` pairs. | `test_trace_irq_safe` (PASS) |
-| **7** | **Unrestricted Capability Delegation**<br>`A01:2025 - Broken Access Control` | `Nexora_Phase_05/kernel/syscall.c` | `sys_cap_delegate` allowed arbitrary processes to inject handles directly into any other process's table without authorization. | Added permission check requiring `target->parent_pid == caller->pid` or an active authenticated IPC relationship. | `test_capability_delegation_rejects_unrelated_process` (PASS) |
+1. **AI Semantics are First-Class Information:** The kernel explicitly differentiates model weights, activations, KV caches, temporary workspaces, dataset shards, checkpoints, and persistent state rather than treating all memory as anonymous pages.
+2. **Data Movement is a Primary Cost:** Optimizes $\text{Compute Cost} + \text{Data Movement Cost}$ holistically. Moving 10 GB across PCIe/interconnects is often more expensive than the compute executed upon it.
+3. **Heterogeneous Compute is Normal:** CPU, GPU, NPU, NIC, and storage appear within a single, unified resource and topology model.
+4. **Work Dependencies Drive Resource Management:** Explicit knowledge of DAG flows ($A \to B \to C$) guides scheduling, prefetching, memory reclamation, and synchronization.
+5. **Policy and Mechanism Remain Separate:** Mechanisms are kernel-level; scheduling policies (FIFO, deadline, locality, energy, LLM inference) remain interchangeable.
+6. **Compatibility Over Purity:** Leverages existing ecosystems (CUDA, ROCm, PJRT, XLA, PyTorch, JAX, vLLM, SGLang) rather than recreating them.
 
 ---
 
-## 🎯 Kernel Unification Milestones (M1–M6)
+# 4. Two-Implementation Strategy
 
-The unification initiative bridges the privilege isolation infrastructure from Phase 05 with the AI execution engine from Phase 14 into a single bootable kernel binary:
+Nexora evolves along two complementary research tracks:
 
-* **Milestone M1 — Physical Memory Manager:**
-  * Replaced monotonic 1 MiB bump allocator with dynamic page frame management over the full bootloader memory map.
-  * *Verification:* 10,000 continuous allocate/free churn cycles pass without memory leak or frame exhaustion.
-* **Milestone M2 — Kernel Heap with Reclamation:**
-  * Implemented slab caches for `ai_tensor` and `ai_work_node` descriptors with slab lifecycle management.
-  * *Verification:* 10,000 tensor create/destroy cycles maintain bounded high-water memory mark.
-* **Milestone M3 — Privilege Boundary Wiring:**
-  * Integrated Phase 05's GDT, TSS, IDT, and per-CPU `%gs` setup directly into Phase 14's `kmain.c` boot path.
-  * *Verification:* IDT correctly vectors interrupts and deliberate early-boot trap points without triple-faulting.
-* **Milestone M4 — Ring 3 ELF Entry Point:**
-  * Embedded and loaded an ELF64 userspace binary stub, executing userspace instructions and issuing round-trip syscalls via `syscall` / `sysretq`.
-  * *Verification:* Userspace binary executes syscall, kernel handles it in Ring 0, and execution safely returns to Ring 3.
-* **Milestone M5 — Exception Handling & Page-Fault Recovery:**
-  * Universal `.fixup_table` support wired into Ring 0 page fault handlers, allowing safe user buffer manipulation.
-  * *Verification:* Invalid userspace pointers passed to kernel copy routines yield `-EFAULT` without triggering kernel panic.
-* **Milestone M6 — Asynchronous Work Scheduler:**
-  * Transitioned the synchronous execution model to a multi-priority queue-driven asynchronous scheduler with dependency satisfaction.
-  * *Verification:* All Phase 14 scheduler test suites pass against the asynchronous executor.
+```text
+   +---------------------------------------+       +---------------------------------------+
+   |              Nexora-RK                |       |               Nexora-X                |
+   |        (Research Microkernel)         |       |      (Experimental Co-Kernel)         |
+   +---------------------------------------+       +---------------------------------------+
+   | - Bare-metal x86_64 / QEMU target     |       | - Linux-hosted co-kernel runtime      |
+   | - Hardware privilege separation       |       | - Bridges PyTorch/JAX to accelerators |
+   | - Frame allocator & slab reclamation  |       | - Hooks CUDA, ROCm, and PJRT backends |
+   | - Custom IDT, TSS, and %gs syscalls   |       | - Large-scale production benchmarking |
+   +---------------------------------------+       +---------------------------------------+
+```
+
+Mechanisms proven in Nexora-X migrate into the bare-metal Nexora-RK.
 
 ---
 
-## 📂 Phase Evolution Index
+# 5. The Eight Core Nexora Primitives
 
-The Nexora codebase represents an iterative evolutionary roadmap structured across 17 distinct engineering phases:
+| # | Primitive | Purpose & Semantic Definition |
+|---|-----------|-------------------------------|
+| **1** | `NXTensor` | Semantic data object with OS-visible dtype, shape, size, location (RAM/HBM), lifetime, mutability, reuse hints, and producer/consumer tracking. |
+| **2** | `NXWork` | Schedulable semantic unit defining operation type, input/output tensors, dependency list, deadline, priority, and resource requirements. |
+| **3** | `NXGraph` | Directed dependency computation graph allowing the OS to determine what can execute, what must wait, and what memory can be immediately freed. |
+| **4** | `NXState` | Persistent semantic resources beyond ephemeral tensors (e.g., loaded model weights, KV caches, LoRA adapters, and persistent agent state). |
+| **5** | `NXResource` | Unified representation making CPUs, GPUs, NPUs, HBM, RAM, NVMe, and NICs queryable through a single common resource model. |
+| **6** | `NXTopology` | Hardware interconnect graph capturing latency, bandwidth, NUMA distance, PCIe hierarchy, and direct accelerator accessibility. |
+| **7** | `NXCapability` | Unforgeable resource authority granting fine-grained execution, memory, model, and network delegation with explicit constraints. |
+| **8** | `NXScheduler` | Multi-factor holistic scheduler evaluating execution time, transfer cost, queue delay, memory pressure, deadline penalties, and topology. |
 
-| Directory | Focus & Milestone | Subsystems Included |
-|-----------|-------------------|---------------------|
-| `Nexora_Phase_01` – `04` | **Early Foundations** | Multiboot headers, serial debugging, page table identity mapping, early long mode transition. |
-| `Nexora_Phase_05` | **Privilege & Userspace** | 64-bit GDT/TSS, `syscall_entry.S`, ELF64 loader, process table, capability delegation, `uaccess`. |
-| `Nexora_Phase_06` – `10` | **IPC & Subsystem Probing** | Synchronous IPC channels, basic hardware descriptors, memory map parsers, testing harnesses. |
-| `Nexora_Phase_11` – `13` | **Security & Observability** | Security model definitions, threat model matrices, reliability metrics, policy validation edges. |
+### The Scheduler Cost Function
+
+For candidate execution unit $D$ and work item $W$:
+
+$$\text{Total Cost}(W, D) = \text{Time}_{\text{exec}} + \text{Cost}_{\text{transfer}} + \text{Delay}_{\text{queue}} + \text{Penalty}_{\text{pressure}} + \text{Penalty}_{\text{deadline}} + \text{Penalty}_{\text{topology}}$$
+
+The lowest acceptable-cost placement wins.
+
+---
+
+# 6. Kernel Architecture: Semantic vs. Mechanism Plane
+
+The kernel cleanly separates semantic understanding from low-level hardware virtualization:
+
+```text
+                  Applications & AI Agents
+                             │
+                      Nexora Runtime
+                             │
+                      Nexora AI ABI
+                             │
+        ┌────────────────────┴────────────────────┐
+        │                                         │
+ [ SEMANTIC PLANE ]                      [ MECHANISM PLANE ]
+   - NXWorkGraph DAGs                      - CPU Scheduler & Timers
+   - NXTensor Lifetimes                    - Physical Frame Allocator
+   - NXState / Model Residency             - Virtual Memory & Paging
+   - NXCapability Security                 - DMA & Device Drivers
+   - NXTopology Placement                  - Interrupt Handlers (IDT)
+        │                                         │
+        └────────────────────┬────────────────────┘
+                             │
+                        NXScheduler
+                             │
+                        NXResource
+                             │
+               Heterogeneous Hardware Fabric
+```
+
+---
+
+# 7. Initial Nexora ABI
+
+The experimental system-call interface is purposefully minimal and semantic-centric:
+
+```c
+/* Tensor Management */
+nx_tensor_create(const nx_tensor_desc_t *desc, nx_handle_t *out_handle);
+nx_tensor_destroy(nx_handle_t tensor);
+nx_tensor_map(nx_handle_t tensor, void **out_addr);
+nx_tensor_unmap(nx_handle_t tensor);
+
+/* Model & Persistent State */
+nx_state_create(const nx_state_desc_t *desc, nx_handle_t *out_handle);
+nx_state_release(nx_handle_t state);
+
+/* Work Graph & Scheduling */
+nx_graph_create(nx_handle_t *out_graph);
+nx_graph_destroy(nx_handle_t graph);
+nx_work_add(nx_handle_t graph, const nx_work_desc_t *work, nx_handle_t *out_node);
+nx_work_submit(nx_handle_t graph, uint32_t flags);
+nx_work_wait(nx_handle_t work_or_graph, uint64_t timeout_ns);
+
+/* Resource & Capability Control */
+nx_resource_query(nx_resource_query_t *query, nx_resource_info_t *info);
+nx_cap_create(const nx_cap_desc_t *desc, nx_handle_t *out_cap);
+nx_cap_delegate(nx_handle_t cap, uint32_t target_pid, nx_handle_t *out_handle);
+nx_cap_revoke(nx_handle_t cap);
+```
+
+---
+
+# 8. Competitive Boundaries & Non-Goals
+
+| System | What It Does | Nexora's Strategic Separation |
+|--------|--------------|-------------------------------|
+| **Linux** | General-purpose OS (threads, pages, cgroups). | Nexora adds OS-level semantic AI resource awareness; does not reproduce full hardware drivers. |
+| **LithOS** | Fine-grained GPU spatial scheduling. | Nexora targets whole-system (CPU + GPU + NPU + RAM + HBM + Fabric) semantic orchestration. |
+| **NVIDIA Dynamo** | Generative-AI distributed inference router. | Dynamo acts at inference-routing level; Nexora operates below it as the host resource engine. |
+| **NVIDIA Run:ai** | Cluster workload pooling and orchestration. | Run:ai manages cluster-level governance; Nexora manages machine-level execution and memory. |
+| **OpenXLA / PJRT** | Framework-independent hardware device API. | Nexora integrates PJRT device backends directly into its semantic fabric. |
+| **AIOS** | Agent scheduler running above the OS. | AIOS sits *above* host OS; Nexora provides the *underlying* capability-protected resource manager. |
+
+### Explicit Non-Goals
+* ❌ Do not build a proprietary GPU driver (leverage CUDA/PJRT/simulated backends).
+* ❌ Do not recreate PyTorch or JAX (they run on top of Nexora).
+* ❌ Do not build another ML compiler (leverage XLA, MLIR, Triton).
+* ❌ Do not recreate Kubernetes (cluster orchestration is out of scope).
+* ❌ Do not implement bloated POSIX compatibility.
+
+---
+
+# 9. Five Research Hypotheses & Target Workload
+
+* **H1 — Semantic Tensor Lifetime:** Producer/consumer DAG tracking enables immediate reclamation of temporary tensors, reducing peak memory by $\ge 15\%$ over lifetime-blind allocation.
+* **H2 — Locality-Aware Scheduling:** Graph and topology co-scheduling reduces avoidable host-to-device and device-to-device transfers by $\ge 20\%$.
+* **H3 — Graph-Aware Scheduling:** Dependency-aware dispatch delivers lower p99 tail latency than independent FIFO scheduling under bursty inference.
+* **H4 — Shared Tensor Handles:** Zero-copy capability-protected tensor sharing between isolated processes eliminates inter-process memory duplication.
+* **H5 — Persistent Model State:** Treating model weights and KV caches as OS-managed persistent state measurably reduces cold-start latency and time-to-first-token (TTFT).
+
+### Primary Target Workload
+> **Multi-model LLM inference on a single heterogeneous machine** (concurrent dynamic requests, shared KV caches, high memory pressure, and CPU/GPU/NPU coordination).
+
+---
+
+# 10. The Four Project Rules
+
+Every kernel abstraction introduced into Nexora must answer four mandatory questions:
+1. *What existing problem does this solve?*
+2. *Why can't the current application/runtime layer solve it adequately?*
+3. *Why should the operating system know about it?*
+4. *What measurable improvement results?*
+
+---
+
+# 11. Immediate Engineering Objective
+
+The immediate priority is completing the semantic-memory loop:
+
+$$\text{NXGraph} \longrightarrow \text{Producer/Consumer DAG} \longrightarrow \text{NXTensor} \longrightarrow \text{Semantic Lifetime} \longrightarrow \text{Physical Allocator} \longrightarrow \text{Auto Reclamation}$$
+
+---
+
+# 12. Security Audit & OWASP 2025 Remediation Matrix
+
+Nexora underwent a comprehensive security audit evaluated against the **OWASP Top 10: 2025** threat model. All 7 identified vulnerabilities have been remediated, verified, and backed by automated regression tests:
+
+| # | Vulnerability & Category | File Location | Security Impact | Remediation & Defensive Implementation | Test Status |
+|---|--------------------------|---------------|-----------------|-----------------------------------------|-------------|
+| **1** | **SYSRET Non-Canonical Return RIP**<br>`A10:2025 - Mishandling of Exceptional Conditions` | `Nexora_Phase_05/arch/x86_64/syscall_entry.S` | Non-canonical RIP in `sysretq` triggers `#GP` in Ring 0 with user stack active (CVE-2012-0217 class). | Validates bits 47..63 before `sysretq`; malformed addresses safely abort to kernel fault dispatch. | `PASS` |
+| **2** | **Shared Global Syscall Stack in `.bss`**<br>`A06:2025 - Insecure Design` | `Nexora_Phase_05/arch/x86_64/syscall_entry.S` | Singleton user stack pointer clobbered under nested interrupts or multicore execution. | Moved `%rsp` storage to per-CPU structs addressed via `%gs:0` and `%gs:8`. | `PASS` |
+| **3** | **ELF Loader Overlapping PT_LOAD Segments**<br>`A08:2025 - Software and Data Integrity Failures` | `Nexora_Phase_05/kernel/elf64.c` | Missed segment overlap check permitted mapping RW pages over executable RX memory ($W \oplus X$ bypass). | Implemented $O(N^2)$ pairwise interval overlap validation across all segments before mapping. | `PASS` |
+| **4** | **Unhandled Page Fault in `uaccess`**<br>`A10:2025 - Mishandling of Exceptional Conditions` | `Nexora_Phase_05/kernel/uaccess.c` | Dereferencing unmapped user pointers from Ring 0 caused unrecoverable kernel panic. | Integrated `.fixup_table` exception handling returning `-EFAULT` cleanly on bad addresses. | `PASS` |
+| **5** | **Kernel `panic()` on Malformed AI Input**<br>`A10:2025 - Mishandling of Exceptional Conditions` | `Nexora_Phase_14/src/ai/tensor.c`, `work.c` | Unsanitized tensor shapes or null pointers halted the operating system via `panic()`. | Replaced panics with structured error codes (`NEXORA_STATUS_INVALID_ARGUMENT`). | `PASS` |
+| **6** | **Non-IRQ-Safe Trace Ring Spinlock**<br>`A06:2025 - Insecure Design` | `Nexora_Phase_17/src/phase17/trace.c` | Writer spinlock acquisition without interrupt masking risked permanent deadlock under ISR re-entry. | Enclosed spinlocks in `nx_irq_save_disable()` / `nx_irq_restore()` blocks. | `PASS` |
+| **7** | **Unrestricted Capability Delegation**<br>`A01:2025 - Broken Access Control` | `Nexora_Phase_05/kernel/syscall.c` | Arbitrary processes could inject handles directly into unrelated processes' handle tables. | Enforced parent-child relationship check (`parent_pid == caller->pid`) or verified IPC channel. | `PASS` |
+
+---
+
+# 13. Kernel Unification Milestones (M1–M6)
+
+* **M1 — Physical Frame Allocator:** 4 KiB page frame allocator replacing the bump allocator; verified over 10,000 churn cycles.
+* **M2 — Kernel Heap with Reclamation:** Dynamic slab caches for `ai_tensor` and `ai_work_node` maintaining bounded memory watermarks.
+* **M3 — Privilege Boundary Wiring:** Early-boot GDT, TSS, IDT, and per-CPU `%gs` initialization prior to kernel idle.
+* **M4 — Ring 3 ELF Entry Point:** Complete user-space bootstrap transitioning from Ring 0 to Ring 3 via `sysretq` / `iretq` with working round-trip syscalls.
+* **M5 — Recoverable Exception Engine:** Double-fault, general protection (#GP), and page-fault (#PF) handlers hooked into `.fixup_table`.
+* **M6 — Async Work Scheduler:** Queue-driven asynchronous execution model for AI work graphs.
+
+---
+
+# 14. Phase Evolution Index
+
+| Phase Directory | Focus | Subsystems & Highlights |
+|-----------------|-------|-------------------------|
+| `Nexora_Phase_01` – `04` | **Foundations** | Multiboot headers, serial logging, early page tables, 64-bit long-mode setup. |
+| `Nexora_Phase_05` | **Privilege & Userspace** | GDT/TSS, `syscall_entry.S`, ELF64 loader, process table, capability delegation, `uaccess`. |
+| `Nexora_Phase_06` – `10` | **IPC & Probing** | Synchronous IPC channels, device probes, memory map validation, test harnesses. |
+| `Nexora_Phase_11` – `13` | **Security & Observability** | Security model definitions, threat model matrices, reliability metrics, policy validation. |
 | `Nexora_Phase_14` | **AI Microkernel Core** | Unified tensor engine, DAG work graph scheduler, capability access control, consolidated `kmain.c`. |
-| `Nexora_Phase_15` – `16` | **Validation & Qualification** | Integration test fixtures, deterministic fault injection, hardware performance benchmarking. |
+| `Nexora_Phase_15` – `16` | **Validation & Hardening** | Integration test fixtures, deterministic fault injection, hardware performance qualification. |
 | `Nexora_Phase_17` | **Telemetry & Release Gating** | Lockless ring-buffer tracing, automated release gating, health watchdog diagnostics. |
 | `docs/` | **Interactive Documentation** | GitHub Pages web portal, interactive security findings inspector, and boot simulation suite. |
 
 ---
 
-## 🌐 Interactive Documentation & Simulator
+# 15. Interactive Documentation & Simulator
 
-Explore the online interactive documentation portal hosted on GitHub Pages:
+Explore the interactive web portal hosted live on GitHub Pages:
 
 ### 🔗 [https://abusuraihsakhri.github.io/Nexora/](https://abusuraihsakhri.github.io/Nexora/)
 
-The portal features:
-1. **Architecture & Phase Map (`index.html`):** Interactive visualization of the 17 kernel phases, memory topologies, and the unified boot execution flow.
-2. **Security Findings Inspector (`findings.html`):** Side-by-side interactive code diffs showing before (vulnerable) and after (remediated) code for all 7 OWASP findings with live severity filters and keyword search.
-3. **Boot State-Machine Simulator (`boot-sim.html`):** Real-time interactive simulation modeling CPU long-mode initialization, GDT/TSS installation, IDT vectoring, ELF64 binary parsing, Ring 0 $\to$ Ring 3 transition, and syscall execution.
+* **Architecture Overview (`index.html`):** Interactive visualization of the 8 core primitives, dual planes, phase roadmap, and boot execution.
+* **Security Findings Inspector (`findings.html`):** Side-by-side interactive before/after code diffs for all 7 OWASP remediations.
+* **Boot State-Machine Simulator (`boot-sim.html`):** Real-time interactive simulation modeling CPU ring transitions, GDT/IDT installation, ELF loading, and syscall round-trips.
 
 ---
 
-## 💻 Building & Testing
-
-### Prerequisites
-* **Compiler:** `gcc` or `clang` with x86_64 target support (cross-compiler `x86_64-elf-gcc` recommended for standalone ISO images).
-* **Assembler:** `nasm` or GNU `as`.
-* **Build System:** `make` (v4.0+) or `cmake` (v3.20+).
-* **Virtualization (Optional):** `qemu-system-x86_64` for kernel emulation.
-
-### Running Test Suites
-
-Each phase maintains dedicated test suites. To execute the unified Phase 14 validation suite:
+# 16. Building & Testing
 
 ```bash
-# Navigate to Phase 14
+# Build and run unified Phase 14 AI microkernel tests
 cd Nexora_Phase_14
-
-# Build and run host-side kernel subsystem tests
 make test
-```
 
-To run Phase 05 privilege and syscall verification tests:
-
-```bash
-cd Nexora_Phase_05
+# Run Phase 05 privilege & syscall isolation tests
+cd ../Nexora_Phase_05
 make test
-```
 
-To run Phase 17 telemetry and trace spinlock validation tests:
-
-```bash
-cd Nexora_Phase_17
+# Run Phase 17 telemetry & IRQ spinlock tests
+cd ../Nexora_Phase_17
 make test
 ```
 
 ---
 
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) files in respective subdirectories for details.
-
----
-
-## 👤 Maintainer & Author
+# 17. Maintainer & Author
 
 * **abusuraihsakhri**  
   * GitHub: [@abusuraihsakhri](https://github.com/abusuraihsakhri)  
