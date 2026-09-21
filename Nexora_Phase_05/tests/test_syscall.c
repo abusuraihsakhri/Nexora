@@ -450,10 +450,34 @@ static void test_elf_loader_rejects_nonexec_entry(void) {
     ASSERT_EQ(capture.calls, 0);
 }
 
+static bool test_fault_probe_reject_unmapped(uintptr_t addr, size_t len, bool write) {
+    (void)len; (void)write;
+    if (addr >= 0x2000 && addr < 0x3000) return false;
+    return true;
+}
+
+static void test_uaccess_unmapped_page_fault_fixup(void) {
+    reset_runtime();
+    uint8_t kbuf[32] = {0};
+
+    nexora_exception_fixup_register(0x2050, 0x2090);
+    ASSERT_EQ(nexora_exception_fixup_lookup(0x2050), 0x2090);
+    ASSERT_EQ(nexora_exception_fixup_lookup(0x1111), 0);
+
+    nexora_uaccess_set_fault_probe(test_fault_probe_reject_unmapped);
+
+    const void *unmapped_user_ptr = (const void *)(uintptr_t)0x2010;
+    nexora_status_t status = nexora_copy_from_user(&p1, kbuf, unmapped_user_ptr, sizeof(kbuf));
+    ASSERT_EQ(status, NEXORA_ERR(NEXORA_EFAULT));
+
+    nexora_uaccess_set_fault_probe(NULL);
+}
+
 int main(void) {
     test_abi_query();
     test_abi_query_without_backend();
     test_uaccess_requires_validator();
+    test_uaccess_unmapped_page_fault_fixup();
     test_tensor_lifecycle_and_stale_handle();
     test_tensor_map_output_fault_has_no_backend_side_effect();
     test_readonly_rights_enforced();
@@ -470,6 +494,6 @@ int main(void) {
     test_elf_loader_validates_and_maps();
     test_elf_loader_rejects_wx();
     test_elf_loader_rejects_nonexec_entry();
-    puts("Phase 5 host tests: PASS (19 test groups)");
+    puts("Phase 5 host tests: PASS (20 test groups)");
     return 0;
 }

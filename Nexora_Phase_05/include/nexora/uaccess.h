@@ -26,4 +26,15 @@ nexora_status_t nexora_copy_to_user(const struct nexora_process *process,
                                     const void *kernel_src,
                                     size_t length);
 
+struct nexora_fixup_entry {
+    uintptr_t fault_addr;
+    uintptr_t fixup_addr;
+};
+
+void nexora_exception_fixup_register(uintptr_t fault_addr, uintptr_t fixup_addr);
+uintptr_t nexora_exception_fixup_lookup(uintptr_t fault_ip);
+
+typedef bool (*nexora_page_fault_probe_t)(uintptr_t addr, size_t len, bool write);
+void nexora_uaccess_set_fault_probe(nexora_page_fault_probe_t probe);
+
 #endif
