@@ -1,0 +1,1 @@
+{"benchmark":"allocation_latency","fixture":true,"metrics":{"median_ns":123,"p95_ns":150,"p99_ns":180},"params":{"iterations":500,"size_bytes":4096,"warmup":50},"platform":"nexora","schema":"nexora.bench.v1","variant":"ai_tensor_create_release"}

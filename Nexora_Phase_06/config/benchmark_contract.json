@@ -1,0 +1,32 @@
+{
+  "schema": "nexora.bench.v1",
+  "benchmark_ids": [
+    "allocation_latency",
+    "graph_scheduling_overhead",
+    "tensor_lifetime_memory_peak",
+    "zero_copy_ipc",
+    "deadline_tail_latency"
+  ],
+  "comparison_guidance": {
+    "allocation_latency": {
+      "linux_variants": ["malloc", "mmap"],
+      "nexora_variant": "ai_tensor_create_release"
+    },
+    "graph_scheduling_overhead": {
+      "linux_variants": ["scan", "ready_queue"],
+      "nexora_variant": "nexora_graph"
+    },
+    "tensor_lifetime_memory_peak": {
+      "linux_variants": ["retain_all", "lifetime_aware"],
+      "nexora_variant": "final_consumer_reclaim"
+    },
+    "zero_copy_ipc": {
+      "linux_variants": ["socket_copy", "shared_mem"],
+      "nexora_variant": "shared_tensor_handle"
+    },
+    "deadline_tail_latency": {
+      "linux_variants": ["fifo", "edf"],
+      "nexora_variant": "nexora_deadline_scheduler"
+    }
+  }
+}

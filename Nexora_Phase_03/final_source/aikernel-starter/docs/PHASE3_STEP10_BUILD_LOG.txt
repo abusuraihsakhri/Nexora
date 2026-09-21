@@ -1,0 +1,80 @@
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/tensor_metadata_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/instrument.c src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/tensor_metadata_test
+build/tests/tensor_metadata_test
+tensor metadata tests: PASS
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/tensor_backing_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/instrument.c src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/tensor_backing_test
+build/tests/tensor_backing_test
+tensor backing tests: PASS
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/ownership_refcount_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/instrument.c src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/ownership_refcount_test
+build/tests/ownership_refcount_test
+ownership/refcount tests: PASS
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/tensor_lifetime_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/instrument.c src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/tensor_lifetime_test
+build/tests/tensor_lifetime_test
+tensor lifetime tests: PASS
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/producer_consumer_graph_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/reclaim.c src/ai/instrument.c src/ai/work.c src/ai/scheduler.c \
+	src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/producer_consumer_graph_test
+build/tests/producer_consumer_graph_test
+producer/consumer graph tests: PASS
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/work_object_redesign_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/reclaim.c src/ai/instrument.c src/ai/work.c src/ai/scheduler.c \
+	src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/work_object_redesign_test
+build/tests/work_object_redesign_test
+work-object redesign tests: PASS
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/locality_placement_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/reclaim.c src/ai/instrument.c src/ai/work.c src/ai/scheduler.c \
+	src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/locality_placement_test
+build/tests/locality_placement_test
+locality/device placement tests: PASS
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/automatic_reclamation_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/reclaim.c src/ai/instrument.c src/ai/work.c src/ai/scheduler.c \
+	src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/automatic_reclamation_test
+build/tests/automatic_reclamation_test
+automatic reclamation tests: PASS
+gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+	tests/phase3_instrumentation_demo_test.c src/ai/tensor.c src/ai/device.c src/ai/lifetime.c src/ai/reclaim.c src/ai/instrument.c src/ai/work.c src/ai/scheduler.c \
+	src/mm/memory_object.c src/kernel/object.c \
+	-o build/tests/phase3_instrumentation_demo_test
+build/tests/phase3_instrumentation_demo_test
+phase3 instrumentation/demo tests: PASS
+baseline peak resident: 622592 bytes
+graph-aware peak resident: 458752 bytes
+peak reduction: 163840 bytes (26.31%)
+graph-aware early reclaimed: 425984 bytes
+graph-aware final resident: 196608 bytes
+trace events: 32
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/kernel/kmain.c -o build/src/kernel/kmain.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/kernel/printk.c -o build/src/kernel/printk.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/kernel/panic.c -o build/src/kernel/panic.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/kernel/object.c -o build/src/kernel/object.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/mm/bump.c -o build/src/mm/bump.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/mm/memory_object.c -o build/src/mm/memory_object.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/tensor.c -o build/src/ai/tensor.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/device.c -o build/src/ai/device.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/lifetime.c -o build/src/ai/lifetime.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/reclaim.c -o build/src/ai/reclaim.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/instrument.c -o build/src/ai/instrument.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/debug.c -o build/src/ai/debug.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/work.c -o build/src/ai/work.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/capability.c -o build/src/ai/capability.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/scheduler.c -o build/src/ai/scheduler.o
+cc -m64 -ffreestanding -fno-pic -fno-pie -c src/arch/x86_64/boot.S -o build/src/arch/x86_64/boot.o
+ld -nostdlib -z max-page-size=0x1000 -T linker.ld build/src/kernel/kmain.o build/src/kernel/printk.o build/src/kernel/panic.o build/src/kernel/object.o build/src/mm/bump.o build/src/mm/memory_object.o build/src/ai/tensor.o build/src/ai/device.o build/src/ai/lifetime.o build/src/ai/reclaim.o build/src/ai/instrument.o build/src/ai/debug.o build/src/ai/work.o build/src/ai/capability.o build/src/ai/scheduler.o build/src/arch/x86_64/boot.o -o build/kernel.elf
+Built build/kernel.elf
+build/kernel.elf: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, not stripped
+UNRESOLVED:
+TOOLS:
+grub-file: unavailable
+grub-mkrescue: unavailable
+qemu-system-x86_64: unavailable

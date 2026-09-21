@@ -1,0 +1,5 @@
+bytes,MiB,median_memcpy_ns,median_memcpy_GiB_s,median_share_handle_ns,median_share_plus_map_ns,copy_peak_payload_bytes,shared_peak_payload_bytes,shared_payload_bytes_copied,latency_ratio_memcpy_to_share_map
+1048576,1.0,24421.6,39.988,31.6,81.1,2097152,1048576,0,301.1
+4194304,4.0,99140.0,39.401,32.7,81.8,8388608,4194304,0,1212.0
+16777216,16.0,853515.2,18.307,31.0,91.1,33554432,16777216,0,9369.0
+33554432,32.0,2091982.8,14.938,32.8,87.0,67108864,33554432,0,24045.8

@@ -1,0 +1,29 @@
+Nexora Phase 16 — Performance Qualification & Release Hardening
+
+Kernel additions:
+  include/ai/telemetry.h
+  src/ai/telemetry.c
+  include/ai/fault_injection.h
+  src/ai/fault_injection.c
+  include/ai/release_health.h
+  src/ai/release_health.c
+
+Qualification tooling:
+  host/phase16_validate.py
+  host/phase16_tracegen.py
+  config/phase16_gates.json
+  tests/test_phase16.c
+  tests/test_validator.py
+  tests/compat/kernel/types.h
+  Makefile.phase16
+
+Integration/documentation:
+  scripts/apply_phase16.py
+  examples/integration_snippet.c
+  docs/PHASE16_PLAN.md
+  docs/BENCHMARK_PROTOCOL.md
+  docs/RELEASE_GATES.md
+  README.md
+  PHASE16_VALIDATION_REPORT.md
+  CROSS_CHECK_REPORT.md
+  PHASE16_MANIFEST.txt

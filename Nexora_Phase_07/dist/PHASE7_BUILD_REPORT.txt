@@ -1,0 +1,37 @@
+Nexora Phase 7 build report
+Generated: 2026-09-20T05:03:21Z
+
+Command: ./scripts/phase7_crosscheck.sh
+[1/8] strict compile + required symbols
+Checking Phase 7 symbols...
+Phase 7 compile/symbol checks passed.
+[2/8] checking required files
+[3/8] checking simulator does not claim real AI execution
+[4/8] checking physical PCI candidates stay offline
+[5/8] checking no vendor GPU API dependency was introduced
+[6/8] checking ELF architecture and unresolved symbols
+[7/8] independently verifying Multiboot2 header
+Multiboot2 header verified at file offset 0x1000, length 24
+[8/8] checking linked addresses remain inside initial identity map
+Phase 7 cross-check: PASS
+
+ELF header:
+  Class:                             ELF64
+  Data:                              2's complement, little endian
+  Type:                              EXEC (Executable file)
+  Machine:                           Advanced Micro Devices X86-64
+  Entry point address:               0x102e30
+
+Multiboot2 section:
+  [ 1] .multiboot_header PROGBITS        0000000000100000 001000 000018 00   A  0   0  8
+
+Kernel size:
+25784 bytes
+
+Undefined symbols:
+
+Runtime tooling present:
+grub-file: no
+grub-mkrescue: no
+qemu-system-x86_64: no
+xorriso: no

@@ -1,0 +1,187 @@
+{
+  "failure_count": 0,
+  "results": [
+    {
+      "baseline": 90.0,
+      "candidate": 90.0,
+      "direction": "lower",
+      "key": "capability.check|latency_ns|ns|allow|tensor-read",
+      "max_regression_pct": 15.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "capability.check",
+        "direction": "lower",
+        "max_regression_pct": 15.0,
+        "metric": "latency_ns",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "median"
+      },
+      "statistic": "median",
+      "status": "pass"
+    },
+    {
+      "baseline": 3200.5,
+      "candidate": 3200.5,
+      "direction": "lower",
+      "key": "distributed.transfer|latency_ns|ns|simulated-remote|64KiB",
+      "max_regression_pct": 15.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "distributed.transfer",
+        "direction": "lower",
+        "max_regression_pct": 15.0,
+        "metric": "latency_ns",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "median"
+      },
+      "statistic": "median",
+      "status": "pass"
+    },
+    {
+      "baseline": 0.0,
+      "candidate": 0.0,
+      "direction": "lower",
+      "key": "ipc.copy|bytes_copied|bytes|shared-handle|1MiB",
+      "max_regression_pct": 0.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "ipc.copy",
+        "direction": "lower",
+        "max_regression_pct": 0.0,
+        "metric": "bytes_copied",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "median"
+      },
+      "statistic": "median",
+      "status": "pass"
+    },
+    {
+      "baseline": 1199.5,
+      "candidate": 1199.5,
+      "direction": "lower",
+      "key": "ipc.copy|latency_ns|ns|shared-handle|1MiB",
+      "max_regression_pct": 10.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "ipc.copy",
+        "direction": "lower",
+        "max_regression_pct": 10.0,
+        "metric": "latency_ns",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "median"
+      },
+      "statistic": "median",
+      "status": "pass"
+    },
+    {
+      "baseline": 800.5,
+      "candidate": 800.5,
+      "direction": "lower",
+      "key": "scheduler.dispatch|latency_ns|ns|graph|mixed",
+      "max_regression_pct": 10.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "scheduler.dispatch",
+        "direction": "lower",
+        "max_regression_pct": 10.0,
+        "metric": "latency_ns",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "median"
+      },
+      "statistic": "median",
+      "status": "pass"
+    },
+    {
+      "baseline": 1409.05,
+      "candidate": 1409.05,
+      "direction": "lower",
+      "key": "scheduler.tail|latency_ns|ns|deadline|mixed",
+      "max_regression_pct": 15.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "scheduler.tail",
+        "direction": "lower",
+        "max_regression_pct": 15.0,
+        "metric": "latency_ns",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "p95"
+      },
+      "statistic": "p95",
+      "status": "pass"
+    },
+    {
+      "baseline": 499.5,
+      "candidate": 499.5,
+      "direction": "lower",
+      "key": "tensor.alloc|latency_ns|ns|lifetime-aware|4KiB",
+      "max_regression_pct": 10.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "tensor.alloc",
+        "direction": "lower",
+        "max_regression_pct": 10.0,
+        "metric": "latency_ns",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "median"
+      },
+      "statistic": "median",
+      "status": "pass"
+    },
+    {
+      "baseline": 1048575.5,
+      "candidate": 1048575.5,
+      "direction": "lower",
+      "key": "tensor.peak|bytes|bytes|lifetime-aware|dag-small",
+      "max_regression_pct": 5.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "tensor.peak",
+        "direction": "lower",
+        "max_regression_pct": 5.0,
+        "metric": "bytes",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "median"
+      },
+      "statistic": "median",
+      "status": "pass"
+    },
+    {
+      "baseline": 350.0,
+      "candidate": 350.0,
+      "direction": "lower",
+      "key": "tensor.reclaim|latency_ns|ns|final-consumer|dag-small",
+      "max_regression_pct": 10.0,
+      "regression_pct": 0.0,
+      "rule": {
+        "allow_insufficient_samples": false,
+        "benchmark": "tensor.reclaim",
+        "direction": "lower",
+        "max_regression_pct": 10.0,
+        "metric": "latency_ns",
+        "min_samples": 30,
+        "required": true,
+        "statistic": "median"
+      },
+      "statistic": "median",
+      "status": "pass"
+    }
+  ],
+  "schema": "nexora.bench.comparison.v1",
+  "status": "pass"
+}

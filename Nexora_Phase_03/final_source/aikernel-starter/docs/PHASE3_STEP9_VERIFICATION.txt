@@ -1,0 +1,43 @@
+Phase 3 Step 9 verification
+===========================
+
+Host test suite:
+
+  tensor metadata tests: PASS
+  tensor backing tests: PASS
+  ownership/refcount tests: PASS
+  tensor lifetime tests: PASS
+  producer/consumer graph tests: PASS
+  work-object redesign tests: PASS
+  locality/device placement tests: PASS
+  automatic reclamation tests: PASS
+
+Freestanding kernel build:
+
+  Built build/kernel.elf
+  ELF 64-bit LSB executable, x86-64, statically linked, not stripped
+  no unresolved symbols reported by nm -u
+
+Compiler mode includes:
+
+  -std=c11
+  -Wall
+  -Wextra
+  -Werror
+  -ffreestanding
+  -fno-stack-protector
+  -fno-pic
+  -fno-pie
+  -mno-red-zone
+
+Environment limitation:
+
+  grub-file, grub-mkrescue, and qemu-system-x86_64 were not available in the
+  execution environment, so Multiboot2/ISO/QEMU runtime verification was not
+  performed here.
+
+Important memory-backend limitation:
+
+  Reclamation removes memory objects from live resident accounting, but the
+  bootstrap early heap is monotonic and cannot return those physical pages to
+  a reusable free list. True physical-page reuse requires the later PMM backend.

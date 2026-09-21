@@ -1,0 +1,51 @@
+Nexora Phase 3 Step 5 verification
+=================================
+
+Host-side test command:
+    make test
+
+Observed results:
+    tensor metadata tests: PASS
+    tensor backing tests: PASS
+    ownership/refcount tests: PASS
+    tensor lifetime tests: PASS
+
+Lifetime tests cover:
+    - temporary final-consumer reclaim
+    - temporary memory-pressure reclaim
+    - re-backing a reclaimed tensor object
+    - persistent automatic reclaim rejection
+    - persistent explicit reclaim
+    - cached eviction
+    - shared-tensor multi-reference protection
+    - external/imported backing behavior
+    - pin override of reclaim policy
+    - per-lifetime live accounting
+    - binding-byte vs actual resident-byte reclaim accounting
+
+Freestanding kernel build command:
+    make build/kernel.elf
+
+Observed result:
+    Built build/kernel.elf
+
+Kernel image inspection:
+    ELF 64-bit LSB executable, x86-64, statically linked
+
+Compiler policy includes:
+    -std=c11
+    -Wall
+    -Wextra
+    -Werror
+    -ffreestanding
+    -fno-stack-protector
+    -fno-pic
+    -fno-pie
+    -mno-red-zone
+
+Kernel ELF SHA-256 from this verification build:
+    441b40333483510665334a4f8b8a7a9b5fd19af5fd56e3d7eb8857eed11ec702
+
+GRUB/QEMU boot execution:
+    Not performed in this environment. grub-file, grub-mkrescue, and
+    qemu-system-x86_64 were not available.

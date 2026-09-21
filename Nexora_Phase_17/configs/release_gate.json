@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "phase": 17,
+  "required_files": [
+    "README_PHASE17.md",
+    "include/nexora/phase17/health.h",
+    "include/nexora/phase17/trace.h",
+    "include/nexora/phase17/watchdog.h",
+    "src/phase17/health.c",
+    "src/phase17/trace.c",
+    "src/phase17/watchdog.c",
+    "tests/test_phase17.c"
+  ]
+}

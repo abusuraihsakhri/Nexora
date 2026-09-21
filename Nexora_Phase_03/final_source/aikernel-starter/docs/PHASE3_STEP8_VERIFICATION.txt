@@ -1,0 +1,51 @@
+Phase 3 Step 8 verification
+===========================
+
+Host test suite:
+
+  make test
+
+Observed result:
+
+  tensor metadata tests: PASS
+  tensor backing tests: PASS
+  ownership/refcount tests: PASS
+  tensor lifetime tests: PASS
+  producer/consumer graph tests: PASS
+  work-object redesign tests: PASS
+  locality/device placement tests: PASS
+
+Freestanding kernel build:
+
+  make build/kernel.elf
+
+Observed result:
+
+  Built build/kernel.elf
+
+Kernel image inspection:
+
+  ELF 64-bit LSB executable, x86-64, statically linked, not stripped
+
+Step 8-specific coverage:
+
+  - persistent NX_OBJECT_DEVICE CPU/GPU/NPU identities
+  - synthetic direct-link topology
+  - overflow-safe transfer-time estimation
+  - tensor preferred/resident device tracking
+  - allowed-device mask enforcement
+  - concrete preferred work device validation
+  - execution-cost estimation by candidate device
+  - input/output transfer accounting
+  - locality-aware device selection
+  - preferred-device equal-cost tie break
+  - scheduler work/device dispatch choice
+  - selected-device recording
+  - output residency commit
+
+Environment limitation:
+
+  grub-file, grub-mkrescue, and qemu-system-x86_64 are not installed in this
+  execution environment, so ISO construction and an actual GRUB/QEMU boot test
+  could not be performed here. The freestanding kernel ELF compiled and linked
+  successfully with -Wall -Wextra -Werror.

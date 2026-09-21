@@ -1,0 +1,3 @@
+Nexora booting...
+NEXORA_BENCH {"schema":"nexora.bench.v1","benchmark":"allocation_latency","platform":"nexora","variant":"ai_tensor_create_release","params":{"iterations":500,"warmup":50,"size_bytes":4096},"metrics":{"median_ns":123,"p95_ns":150,"p99_ns":180},"fixture":true}
+Nexora benchmark complete.

@@ -1,0 +1,146 @@
+Nexora / AIKernel — Phase 4 Step 10 final validation
+Date: 2026-09-19
+
+Scope
+-----
+Final Phase 4 integration and benchmark gate for:
+- work domains
+- opaque handle namespaces
+- handle rights and attenuation
+- SHARE / TRANSFER delegation
+- shared tensor backing and logical mappings
+- tensor/backing/handle/mapping lifetime
+- local revocation and pinned access
+- concurrency hardening
+- adversarial/fuzz/race/stress tests
+- work-graph/scheduler compatibility
+- copy-vs-share benchmark
+
+Toolchain / environment
+-----------------------
+GCC: gcc (Debian 14.2.0-19) 14.2.0
+GNU ld: GNU Binutils 2.44
+Host: Linux 6.18.44 x86_64 under KVM
+CPU reported by host: AMD EPYC 9V74
+
+Kernel compile settings
+-----------------------
+-std=c11 -O2 -Wall -Wextra -Werror
+-ffreestanding -fno-stack-protector -fno-pic -fno-pie
+-m64 -mno-red-zone
+
+Final commands exercised
+------------------------
+1. make clean
+2. make build/kernel.elf -j2
+3. make test-host
+4. make test-host-sanitize
+5. make test-host-step9-sanitize
+6. make test-host-step10-sanitize
+7. make test-host-tsan
+8. make test-host-step9-tsan
+9. make test-host-step9-stress
+10. make phase4-gate
+11. five fresh executions of build/benchmarks/zero_copy_benchmark
+
+Results
+-------
+Kernel ELF build: PASS
+Legacy handle/rights tests: PASS
+Cross-domain delegation tests: PASS
+Zero-copy mapping tests: PASS
+Step 7 lifetime tests: PASS
+Step 8 concurrency/revocation tests: PASS
+Step 9 adversarial security tests: PASS
+Step 9 race matrix: PASS
+Step 9 randomized concurrent stress: PASS
+Step 9 repeated race/randomized stress: 10/10 PASS
+Step 10 end-to-end Phase 4 integration test: PASS
+Step 10 scheduler compatibility sequence: PASS
+ASan + UBSan legacy tests: PASS
+ASan + UBSan Step 9 tests: PASS
+ASan + UBSan Step 10 integration test: PASS
+ThreadSanitizer Step 8 concurrency test: PASS
+ThreadSanitizer Step 9 race matrix: PASS
+ThreadSanitizer Step 9 randomized stress: PASS
+make phase4-gate: PASS
+Five-run zero-copy benchmark collection: PASS
+
+Step 10 integration assertions
+------------------------------
+PASS: producer/consumer/receiver domains activate and tear down cleanly.
+PASS: producer can delegate only a rights subset to consumer.
+PASS: consumer read-only handle cannot create a writable mapping.
+PASS: producer and consumer logical virtual addresses differ.
+PASS: producer and consumer mappings resolve to the same physical backing token.
+PASS: producer writes are visible through consumer/receiver mappings without payload copy.
+PASS: transitive SHARE succeeds only when SHARE was explicitly delegated.
+PASS: TRANSFER invalidates the source namespace token after successful destination install.
+PASS: producer mapping remains valid after source-handle transfer.
+PASS: local revocation blocks new consumer acquisitions/mappings.
+PASS: an already established mapping remains valid after local handle revocation.
+PASS: local revocation does not recursively revoke an already delegated receiver handle.
+PASS: a pinned mapping view remains valid after its mapping ID is unmapped.
+PASS: work graph schedules producer before dependent consumer over the same tensor object.
+PASS: handles can all disappear while mappings continue to retain tensor/backing lifetime.
+PASS: final mapping release retires tensor and backing exactly once.
+PASS: tensor/backing/domain registries drain to zero.
+
+Benchmark summary (median of 5 fresh process runs)
+--------------------------------------------------
+Payload   memcpy handoff   memcpy BW   SHARE handle   SHARE+MAP    shared payload copied
+1 MiB     24.4 us          40.0 GiB/s  31.6 ns        81.1 ns      0 bytes
+4 MiB     99.1 us          39.4 GiB/s  32.7 ns        81.8 ns      0 bytes
+16 MiB    0.854 ms         18.3 GiB/s  31.0 ns        91.1 ns      0 bytes
+32 MiB    2.092 ms         14.9 GiB/s  32.8 ns        87.0 ns      0 bytes
+
+Payload-footprint model
+-----------------------
+Conventional two-buffer copy handoff: approximately 2N payload bytes resident.
+Shared backing handoff: approximately N payload bytes + small metadata.
+Step 10 benchmark explicitly reports 0 tensor payload bytes copied by SHARE/MAP.
+
+Benchmark interpretation boundary
+---------------------------------
+The current mapping subsystem records domain-local logical virtual mappings but
+DOES NOT install distinct hardware page tables. The SHARE/MAP timings therefore
+measure host-side kernel metadata operations only. They omit syscall transitions,
+context switches, MMU page-table installation, TLB shootdowns, IOMMU/device
+programming, scheduler wakeups and NUMA effects. The large numerical latency
+ratios against memcpy MUST NOT be reported as end-to-end Nexora application
+speedups. They demonstrate the expected scaling distinction: memcpy is O(N)
+with payload size, while capability/mapping metadata is approximately O(1) with
+respect to payload size in this prototype.
+
+Cache/TLB status
+----------------
+Direct hardware cache/TLB counters: NOT MEASURED.
+Reason: doing so before real per-domain hardware mappings would not characterize
+the intended Phase 5 system. PMU/perf measurements should be added after the
+user-mode/page-table implementation.
+
+Boot/ISO validation
+-------------------
+QEMU boot test: NOT RUN
+Multiboot grub-file check: NOT RUN
+Bootable ISO creation: NOT RUN
+
+Reason: qemu-system-x86_64, grub-file, grub-mkrescue and xorriso are not installed
+in this execution environment.
+
+Remaining architectural boundaries
+----------------------------------
+- No user mode/syscall ABI yet.
+- No hardware per-domain page tables/MMU enforcement yet.
+- No IOMMU/device isolation yet.
+- No real kernel APIC/SMP startup yet; host pthread tests exercise the same metadata structures.
+- Spinlocks are not IRQ-save/preemption-aware.
+- Revocation is local-token, not transitive capability-lineage revocation.
+- WORK/GENERIC handle objects do not yet have managed lifetime hooks.
+- Bump-allocator reclamation is logical; physical page recycling awaits a frame allocator/heap.
+- Overlapping shared tensor writes require higher-layer synchronization/fence semantics.
+
+Phase 4 conclusion
+------------------
+PASS at the prototype/logical-mapping level.
+Next implementation gate: Phase 5 — user mode, syscall ABI, and real address-space binding.

@@ -1,0 +1,36 @@
+
+build/arch/syscall_entry.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <nexora_syscall_entry>:
+   0:	0f 01 f8             	swapgs
+   3:	48 89 25 00 00 00 00 	mov    %rsp,0x0(%rip)        # a <nexora_syscall_entry+0xa>
+   a:	48 8b 25 00 00 00 00 	mov    0x0(%rip),%rsp        # 11 <nexora_syscall_entry+0x11>
+  11:	51                   	push   %rcx
+  12:	41 53                	push   %r11
+  14:	50                   	push   %rax
+  15:	57                   	push   %rdi
+  16:	56                   	push   %rsi
+  17:	52                   	push   %rdx
+  18:	41 52                	push   %r10
+  1a:	41 50                	push   %r8
+  1c:	41 51                	push   %r9
+  1e:	48 89 e7             	mov    %rsp,%rdi
+  21:	48 83 ec 08          	sub    $0x8,%rsp
+  25:	e8 00 00 00 00       	call   2a <nexora_syscall_entry+0x2a>
+  2a:	48 83 c4 08          	add    $0x8,%rsp
+  2e:	4c 8b 0c 24          	mov    (%rsp),%r9
+  32:	4c 8b 44 24 08       	mov    0x8(%rsp),%r8
+  37:	4c 8b 54 24 10       	mov    0x10(%rsp),%r10
+  3c:	48 8b 54 24 18       	mov    0x18(%rsp),%rdx
+  41:	48 8b 74 24 20       	mov    0x20(%rsp),%rsi
+  46:	48 8b 7c 24 28       	mov    0x28(%rsp),%rdi
+  4b:	48 8b 44 24 30       	mov    0x30(%rsp),%rax
+  50:	4c 8b 5c 24 38       	mov    0x38(%rsp),%r11
+  55:	48 8b 4c 24 40       	mov    0x40(%rsp),%rcx
+  5a:	48 83 c4 48          	add    $0x48,%rsp
+  5e:	48 8b 25 00 00 00 00 	mov    0x0(%rip),%rsp        # 65 <nexora_syscall_entry+0x65>
+  65:	0f 01 f8             	swapgs
+  68:	48 0f 07             	sysretq

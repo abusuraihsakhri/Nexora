@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "defaults": {
+    "direction": "lower",
+    "statistic": "median",
+    "max_regression_pct": 10.0,
+    "min_samples": 30,
+    "allow_insufficient_samples": false,
+    "required": true
+  },
+  "rules": [
+    {"benchmark": "scheduler.dispatch", "metric": "latency_ns", "max_regression_pct": 10.0},
+    {"benchmark": "scheduler.tail", "metric": "latency_ns", "statistic": "p95", "max_regression_pct": 15.0},
+    {"benchmark": "tensor.alloc", "metric": "latency_ns", "max_regression_pct": 10.0},
+    {"benchmark": "tensor.peak", "metric": "bytes", "max_regression_pct": 5.0},
+    {"benchmark": "tensor.reclaim", "metric": "latency_ns", "max_regression_pct": 10.0},
+    {"benchmark": "ipc.copy", "metric": "latency_ns", "max_regression_pct": 10.0},
+    {"benchmark": "ipc.copy", "metric": "bytes_copied", "max_regression_pct": 0.0},
+    {"benchmark": "capability.check", "metric": "latency_ns", "max_regression_pct": 15.0},
+    {"benchmark": "distributed.transfer", "metric": "latency_ns", "max_regression_pct": 15.0}
+  ]
+}

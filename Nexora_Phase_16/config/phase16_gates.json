@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "minimum_runs_per_test": 30,
+  "required_scenarios": [
+    "boot",
+    "scheduler",
+    "allocator",
+    "zero_copy_shared_tensor",
+    "capability_isolation",
+    "fault_recovery",
+    "distributed_remote",
+    "telemetry_pressure"
+  ],
+  "zero_copy_scenarios": [
+    "zero_copy_shared_tensor"
+  ],
+  "gates": {
+    "success_rate_min": 1.0,
+    "isolation_violations_max": 0,
+    "unrecovered_faults_max": 0,
+    "telemetry_drops_max": 0,
+    "median_latency_regression_pct_max": 5.0,
+    "p99_latency_regression_pct_max": 10.0,
+    "peak_memory_regression_pct_max": 5.0,
+    "zero_copy_payload_bytes_copied_max": 0
+  }
+}

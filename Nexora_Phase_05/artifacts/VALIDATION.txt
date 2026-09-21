@@ -1,0 +1,87 @@
+rm -rf build
+python3 scripts/cross_check_phase5.py
+Phase 5 cross-file consistency: PASS
+Roadmap milestone calls: 7 / 7 matched
+Header/docs/wrappers/dispatcher syscall numbering: matched
+Host test groups declared: 19
+cc -std=c11 -Wall -Wextra -Werror -Wno-enum-compare -Ireference/starter_include -Iinclude -fsyntax-only reference/compat_check.c
+Starter enum/value compatibility: PASS (known output-limit delta documented)
+cc -std=c11 -O2 -Wall -Wextra -Werror -pedantic -Iinclude kernel/handle.c kernel/process.c kernel/uaccess.c kernel/backend.c kernel/elf64.c kernel/syscall.c tests/mock_backend.c tests/test_syscall.c -o build/test_phase5
+./build/test_phase5
+Phase 5 host tests: PASS (19 test groups)
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c arch/x86_64/gdt.c -o build/arch/gdt.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c arch/x86_64/syscall_msr.c -o build/arch/syscall_msr.o
+cc -m64 -ffreestanding -fno-pic -fno-pie -Iinclude -c arch/x86_64/syscall_entry.S -o build/arch/syscall_entry.o
+cc -m64 -ffreestanding -fno-pic -fno-pie -Iinclude -c arch/x86_64/usermode.S -o build/arch/usermode.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c kernel/handle.c -o build/arch/handle.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c kernel/process.c -o build/arch/process.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c kernel/uaccess.c -o build/arch/uaccess.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c kernel/backend.c -o build/arch/backend.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c kernel/elf64.c -o build/arch/elf64.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c kernel/syscall.c -o build/arch/syscall.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -Iuser/libnexora -c user/libnexora/nexora.c -o build/user/libnexora.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -Iuser/libnexora -c user/demo/main.c -o build/user/main.o
+cc -m64 -ffreestanding -fno-pic -fno-pie -Iinclude -c user/demo/start.S -o build/user/start.o
+ld -nostdlib -T user/user.ld build/user/start.o build/user/main.o build/user/libnexora.o -o build/user/demo.elf
+Phase 5 validation complete.
+
+Undefined freestanding references (expected only cross-object Nexora symbols):
+
+build/arch/backend.o:
+
+build/arch/elf64.o:
+
+build/arch/gdt.o:
+
+build/arch/handle.o:
+
+build/arch/process.o:
+                 U nexora_handle_table_init
+
+build/arch/syscall.o:
+                 U nexora_backend_get
+                 U nexora_copy_from_user
+                 U nexora_copy_to_user
+                 U nexora_handle_alloc
+                 U nexora_handle_remove
+                 U nexora_handle_resolve
+                 U nexora_process_lookup
+                 U nexora_process_unregister
+                 U nexora_uaccess_range_ok
+
+build/arch/syscall_entry.o:
+                 U nexora_syscall_dispatch_frame
+
+build/arch/syscall_msr.o:
+                 U nexora_syscall_entry
+                 U nexora_syscall_kernel_rsp
+                 U nexora_x86_set_kernel_stack
+
+build/arch/uaccess.o:
+
+build/arch/usermode.o:
+
+Userspace ELF program headers:
+
+Elf file type is EXEC (Executable file)
+Entry point 0x40000000
+There are 4 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset             VirtAddr           PhysAddr
+                 FileSiz            MemSiz              Flags  Align
+  LOAD           0x0000000000001000 0x0000000040000000 0x0000000040000000
+                 0x00000000000002f5 0x00000000000002f5  R E    0x1000
+  LOAD           0x0000000000002000 0x0000000040001000 0x0000000040001000
+                 0x0000000000000108 0x0000000000000108  R      0x1000
+  LOAD           0x0000000000000000 0x0000000040002000 0x0000000040002000
+                 0x0000000000000000 0x0000000000000020  RW     0x1000
+  GNU_STACK      0x0000000000000000 0x0000000000000000 0x0000000000000000
+                 0x0000000000000000 0x0000000000000000  RW     0x10
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .text 
+   01     .rodata .eh_frame 
+   02     .bss 
+   03     

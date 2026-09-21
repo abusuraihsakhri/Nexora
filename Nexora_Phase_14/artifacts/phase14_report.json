@@ -1,0 +1,27 @@
+{
+  "phase": 14,
+  "status": "PASS",
+  "assertions": {"passed": 55, "failed": 0, "total": 55},
+  "stress": {"rounds_completed": 48, "rounds_requested": 48},
+  "graphs": {"validated": 49, "completed": 49, "deadlocks_detected": 1},
+  "scheduler_dispatches": 147,
+  "tensor_bytes_accounted": 34640,
+  "heap": {"before": 0, "after": 66504, "growth": 66504},
+  "checks": {
+    "capability_isolation": true,
+    "deadlock_detection": true,
+    "tensor_accounting": true,
+    "memory_accounting": true
+  },
+  "benchmark": {
+    "status": "PASS",
+    "scenarios_run": 4,
+    "scenarios_completed": 4,
+    "nodes_total": 60,
+    "edges_total": 56,
+    "dispatches": 60,
+    "picks": 60,
+    "candidates_scanned": 1360,
+    "selection_efficiency_ppm": 44117
+  }
+}

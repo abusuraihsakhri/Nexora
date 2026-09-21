@@ -1,0 +1,32 @@
+Nexora-Phase1-Foundation/
+├── README.md
+├── PROJECT_TREE.txt
+├── docs/
+│   └── phase1/
+│       ├── 01-bootstrap.md
+│       ├── 02-early-kernel.md
+│       ├── 03-cpu-foundation.md
+│       ├── 04-physical-memory.md
+│       ├── 05-virtual-memory.md
+│       ├── 06-kernel-heap.md
+│       ├── 07-interrupts-apic-time.md
+│       ├── 08-scheduler-threads.md
+│       ├── 09-ring3-processes-syscalls.md
+│       └── 10-integration-hardening.md
+├── kernel/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── kernel.rs
+│       ├── arch/x86_64/...
+│       ├── mm/...
+│       ├── scheduler/...
+│       ├── task/...
+│       ├── process/...
+│       ├── syscall/...
+│       ├── sync/...
+│       └── test/...
+└── user/
+    └── init/
+        ├── Cargo.toml
+        └── src/main.rs

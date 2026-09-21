@@ -1,0 +1,41 @@
+{
+  "project": "Nexora",
+  "phase": "11.1",
+  "title": "Formal Security, Policy Enforcement, and Hardening Corrections",
+  "security_defaults": {
+    "default_decision": "deny",
+    "explicit_deny_precedence": true,
+    "grant_composition_for_rights": false,
+    "delegation": "attenuating-only",
+    "revocation": "cascading",
+    "global_epoch_revocation": true,
+    "inactive_slot_reclamation": true,
+    "wildcard_request_sentinel_rejected": true,
+    "management_operations": "trusted-kernel-wrapper-required",
+    "synchronization": "external",
+    "audit": "fixed-size ordered ring"
+  },
+  "resource_kinds": [
+    "tensor",
+    "model",
+    "device",
+    "network_endpoint",
+    "remote_tensor",
+    "collective"
+  ],
+  "constraints": [
+    "rights",
+    "time_window",
+    "per_request_byte_limit",
+    "per_request_device_quota_basis_points",
+    "delegation_depth",
+    "epoch"
+  ],
+  "explicit_non_goals": [
+    "cumulative_byte_accounting",
+    "actual_gpu_utilization_metering",
+    "hardware_gpu_isolation",
+    "cryptographic_capability_integrity",
+    "persistent_tamper_proof_audit"
+  ]
+}

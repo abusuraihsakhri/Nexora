@@ -1,0 +1,17 @@
+[package]
+name = "nexora-kernel"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+heap-debug = []
+kernel-self-test = []
+scheduler-trace = []
+fault-injection = []
+qemu-exit = []
+
+[dependencies]

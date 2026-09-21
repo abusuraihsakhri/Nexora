@@ -1,0 +1,92 @@
+Nexora Phase 9 deep cross-check
+UTC: 2026-09-20T06:34:09Z
+
+[1/9] GCC host compile with warnings as errors
+PASS
+
+[2/9] Host behavioral and adversarial tests
+Phase 9 tests: PASS
+
+[3/9] Clang portability compile/test when available
+Phase 9 tests: PASS
+PASS
+
+[4/9] Address/undefined-behavior sanitizer run
+Phase 9 tests: PASS
+PASS
+
+[5/9] Freestanding compile
+PASS
+
+[6/9] Forbidden dependency and compiler-runtime scan
+PASS
+
+[7/9] Module/reference-tree mirror check
+PASS
+
+[8/9] Build/link reference kernel ELF
+make: Entering directory '/mnt/data/nexora-phase9-crosschecked/reference_tree'
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/kernel/kmain.c -o build/src/kernel/kmain.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/kernel/printk.c -o build/src/kernel/printk.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/kernel/panic.c -o build/src/kernel/panic.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/mm/bump.c -o build/src/mm/bump.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/tensor.c -o build/src/ai/tensor.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/work.c -o build/src/ai/work.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/capability.c -o build/src/ai/capability.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/scheduler.c -o build/src/ai/scheduler.o
+cc -std=c11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -fno-pie -m64 -mno-red-zone -Iinclude -c src/ai/distributed.c -o build/src/ai/distributed.o
+cc -m64 -ffreestanding -fno-pic -fno-pie -c src/arch/x86_64/boot.S -o build/src/arch/x86_64/boot.o
+ld -nostdlib -z max-page-size=0x1000 -T linker.ld build/src/kernel/kmain.o build/src/kernel/printk.o build/src/kernel/panic.o build/src/mm/bump.o build/src/ai/tensor.o build/src/ai/work.o build/src/ai/capability.o build/src/ai/scheduler.o build/src/ai/distributed.o build/src/arch/x86_64/boot.o -o build/kernel.elf
+Built build/kernel.elf
+make: Leaving directory '/mnt/data/nexora-phase9-crosschecked/reference_tree'
+PASS
+
+[9/9] Verify stable package SHA-256 manifest
+./CHANGELOG_PHASE9.md: OK
+./PHASE9_MANIFEST.md: OK
+./README.md: OK
+./docs/PHASE9.md: OK
+./docs/PHASE9_API.md: OK
+./docs/PHASE9_CROSSCHECK.md: OK
+./docs/PHASE9_INTEGRATION.md: OK
+./integration/Makefile.phase9: OK
+./module/include/ai/distributed.h: OK
+./module/src/ai/distributed.c: OK
+./module/tests/host_stubs.c: OK
+./module/tests/phase9_host_test.c: OK
+./reference_tree/.gitignore: OK
+./reference_tree/LICENSE: OK
+./reference_tree/Makefile: OK
+./reference_tree/README.md: OK
+./reference_tree/docs/ARCHITECTURE.md: OK
+./reference_tree/docs/DESIGN_PRINCIPLES.md: OK
+./reference_tree/docs/ROADMAP.md: OK
+./reference_tree/grub.cfg: OK
+./reference_tree/include/ai/capability.h: OK
+./reference_tree/include/ai/device.h: OK
+./reference_tree/include/ai/distributed.h: OK
+./reference_tree/include/ai/scheduler.h: OK
+./reference_tree/include/ai/tensor.h: OK
+./reference_tree/include/ai/work.h: OK
+./reference_tree/include/kernel/memory.h: OK
+./reference_tree/include/kernel/panic.h: OK
+./reference_tree/include/kernel/printk.h: OK
+./reference_tree/include/kernel/types.h: OK
+./reference_tree/linker.ld: OK
+./reference_tree/scripts/debug.sh: OK
+./reference_tree/scripts/run.sh: OK
+./reference_tree/src/ai/capability.c: OK
+./reference_tree/src/ai/distributed.c: OK
+./reference_tree/src/ai/scheduler.c: OK
+./reference_tree/src/ai/tensor.c: OK
+./reference_tree/src/ai/work.c: OK
+./reference_tree/src/arch/x86_64/boot.S: OK
+./reference_tree/src/kernel/kmain.c: OK
+./reference_tree/src/kernel/panic.c: OK
+./reference_tree/src/kernel/printk.c: OK
+./reference_tree/src/mm/bump.c: OK
+./reports/CROSSCHECK_FINDINGS.md: OK
+./scripts/crosscheck.sh: OK
+PASS
+
+RESULT: PASS — Phase 9 is internally consistent, adversarially checked, and baseline-ABI buildable.

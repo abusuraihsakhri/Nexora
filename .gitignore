@@ -1,0 +1,10 @@
+# Build artifacts
+**/build/
+**/build-host/
+*.o
+*.exe
+*.iso
+
+# OS metadata
+.DS_Store
+Thumbs.db

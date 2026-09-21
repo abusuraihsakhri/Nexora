@@ -1,0 +1,63 @@
+TAP version 13
+ok 1 - ai_tensor_validate(a)
+ok 2 - ai_tensor_validate(b)
+ok 3 - a->bytes == 64
+ok 4 - b->bytes == 128
+ok 5 - ai_tensor_total_bytes() == 192
+ok 6 - ai_tensor_bytes_at_location(AI_LOC_CPU_RAM) == 64
+ok 7 - ai_tensor_bytes_at_location(AI_LOC_GPU_HBM) == 128
+ok 8 - ai_work_graph_validate(&graph, &validation)
+ok 9 - validation.valid
+ok 10 - validation.node_count == 2
+ok 11 - validation.edge_count == 1
+ok 12 - !ai_work_graph_validate(&missing, &validation)
+ok 13 - validation.missing_dependencies == 1
+ok 14 - !ai_work_graph_validate(&cycle, &validation)
+ok 15 - validation.cycle_nodes == 2
+ok 16 - ai_scheduler_pick(&scheduler) == high
+ok 17 - ai_scheduler_pick(&scheduler) == early
+ok 18 - ai_scheduler_pick(&scheduler) == late
+ok 19 - ai_scheduler_run_to_completion(&scheduler, &report)
+ok 20 - report.completed_nodes == 3
+ok 21 - scheduler.dispatch_count == 3
+ok 22 - scheduler.candidate_scan_count >= 9
+ok 23 - !ai_scheduler_run_to_completion(&scheduler, &report)
+ok 24 - report.deadlocked
+ok 25 - scheduler.deadlock_count == 1
+ok 26 - ai_cap_has(&cap, AI_CAP_TENSOR_READ)
+ok 27 - ai_cap_has(&cap, AI_CAP_MODEL_USE)
+ok 28 - ai_cap_has(&cap, AI_CAP_GPU_USE)
+ok 29 - !ai_cap_has(&cap, AI_CAP_TENSOR_WRITE)
+ok 30 - !ai_cap_has(&cap, AI_CAP_NETWORK)
+ok 31 - !ai_cap_has(&cap, AI_CAP_ADMIN)
+ok 32 - early_heap_can_alloc(32, 16)
+ok 33 - stats.allocations == 2
+ok 34 - stats.requested_bytes == 23
+ok 35 - stats.padding_bytes == 9
+ok 36 - stats.used == 32
+ok 37 - stats.high_watermark == 32
+ok 38 - !early_heap_can_alloc(8, 3)
+ok 39 - ai_benchmark_run(&report)
+ok 40 - report.scenarios_run == 4
+ok 41 - report.scenarios_completed == 4
+ok 42 - report.nodes_total == 60
+ok 43 - report.edges_total == 56
+ok 44 - report.dispatches == 60
+ok 45 - report.candidates_scanned > report.dispatches
+ok 46 - report.selection_efficiency_ppm > 0
+ok 47 - ai_phase14_run(&report)
+ok 48 - report.passed
+ok 49 - report.assertions_failed == 0
+ok 50 - report.stress_rounds_completed == AI_PHASE14_STRESS_ROUNDS
+ok 51 - report.deadlocks_detected == 1
+ok 52 - report.graphs_validated == AI_PHASE14_STRESS_ROUNDS + 1
+ok 53 - report.graphs_completed == AI_PHASE14_STRESS_ROUNDS + 1
+ok 54 - report.capability_isolation_ok
+ok 55 - report.deadlock_detection_ok
+ok 56 - report.tensor_accounting_ok
+ok 57 - report.memory_accounting_ok
+ok 58 - report.benchmark.passed
+ok 59 - report.heap_growth > 0
+ok 60 - report.heap_after < early_heap_capacity()
+1..60
+Phase 14 host verification: PASS (60/60 passed)

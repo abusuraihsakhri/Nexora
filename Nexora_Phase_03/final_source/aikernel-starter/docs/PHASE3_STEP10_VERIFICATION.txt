@@ -1,0 +1,44 @@
+Phase 3 Step 10 verification
+============================
+
+Host test suite:
+  make test
+
+Observed:
+  tensor metadata tests: PASS
+  tensor backing tests: PASS
+  ownership/refcount tests: PASS
+  tensor lifetime tests: PASS
+  producer/consumer graph tests: PASS
+  work-object redesign tests: PASS
+  locality/device placement tests: PASS
+  automatic reclamation tests: PASS
+  phase3 instrumentation/demo tests: PASS
+
+Step 10 synthetic A/B result:
+  baseline peak resident:       622592 bytes
+  graph-aware peak resident:    458752 bytes
+  peak reduction:               163840 bytes (26.31%)
+  graph-aware early reclaimed:  425984 bytes
+  graph-aware final resident:   196608 bytes
+  trace events:                 32
+
+Freestanding kernel build:
+  make build/kernel.elf
+
+Observed:
+  build/kernel.elf: ELF 64-bit LSB executable, x86-64, statically linked
+  nm -u build/kernel.elf: no unresolved symbols
+
+Boot/ISO limitation in this execution environment:
+  grub-file: unavailable
+  grub-mkrescue: unavailable
+  qemu-system-x86_64: unavailable
+
+Therefore compilation/linking and host behavior were verified here, but GRUB/QEMU boot
+execution was not performed in this environment.
+
+Important interpretation caveat:
+  The 26.31% result is a reduction in peak live-resident accounting in the controlled host
+  experiment. The current early-heap backend is monotonic, so reclaimed pages are not yet
+  physically reusable.

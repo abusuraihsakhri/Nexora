@@ -1,0 +1,123 @@
+{
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": ".github/workflows/phase17-release-gate.yml",
+      "sha256": "93314846dac48ade1ea43a83ac02360542ea7b6380f55d37d28b595832c9a313",
+      "size": 443
+    },
+    {
+      "path": "CHANGELOG_PHASE17.md",
+      "sha256": "1071ef64d5988d5e83eecf1d2cfaf6a82352e2b6c310dc57f4c6dd3d2a8f6212",
+      "size": 543
+    },
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "c168fdfd24ac7b6e4a9c2ac39095158cb97fef0f7d53fd35a579315fdf20743a",
+      "size": 601
+    },
+    {
+      "path": "Makefile",
+      "sha256": "a70356ea71439b0bbc1a0f37b81c13ae2184208eed75adedf2b12ece7ecd5958",
+      "size": 270
+    },
+    {
+      "path": "PHASE17_INTEGRATION.md",
+      "sha256": "2e9fb528e9f1e77f8f81fee8de4cc9e2852961efcfdab7a28c8867ba8a525961",
+      "size": 1472
+    },
+    {
+      "path": "README_PHASE17.md",
+      "sha256": "dc1d02a72f16fc8d343602589dcebda7fb3d46ca9bfc01974e62de6da7a57766",
+      "size": 1679
+    },
+    {
+      "path": "configs/release_gate.json",
+      "sha256": "84b9898ee8f0fd02a985632f78a7d566bb8b23fe2079f24eb186a0c6f345d6f9",
+      "size": 315
+    },
+    {
+      "path": "docs/PHASE17_ACCEPTANCE.md",
+      "sha256": "f1a9df69492911c8af62527ebb6a7b5d3167f1267dd72821f918966a49369bc4",
+      "size": 988
+    },
+    {
+      "path": "docs/PHASE17_DESIGN.md",
+      "sha256": "ae8cf6ccff168eed7c9b9e9002085d1c428ba3d58adbdbb27d9f1c596ff224fb",
+      "size": 1430
+    },
+    {
+      "path": "include/nexora/phase17/build_info.h",
+      "sha256": "30c96df3c11c6fae979d1ce154167ef270da97ad53f21180ff6c5d4196bad2af",
+      "size": 431
+    },
+    {
+      "path": "include/nexora/phase17/health.h",
+      "sha256": "cffe8ff351c63bfdd91127aaf221b001d7ff2b5b6a9a76d34192f8ff068a4ef9",
+      "size": 1266
+    },
+    {
+      "path": "include/nexora/phase17/trace.h",
+      "sha256": "ebfbe109f99907d879773f45fdbd8e9023c670dd7ee754235780593c99d066bb",
+      "size": 1103
+    },
+    {
+      "path": "include/nexora/phase17/watchdog.h",
+      "sha256": "27e28897feff211be3385cf284fa7f08498ccb7fd78e07761d06a8238363bf1a",
+      "size": 818
+    },
+    {
+      "path": "src/phase17/build_info.c",
+      "sha256": "44dee18a1a592ea72ddc360b8f4fbcb85aa9ea2af8084ed475e8c184c7c14616",
+      "size": 891
+    },
+    {
+      "path": "src/phase17/health.c",
+      "sha256": "3242e1547b1dbf5231cd07f5169d2d572398121213781ae3bb2668e68a878ff0",
+      "size": 5593
+    },
+    {
+      "path": "src/phase17/trace.c",
+      "sha256": "ec8badd4ef83fe497c98416b2af0ee85dd403ea96b26db968cabde321c0c9d94",
+      "size": 5800
+    },
+    {
+      "path": "src/phase17/watchdog.c",
+      "sha256": "f15a5b8abd7e2ce769309925df5d4f87572433aed24ac24d6a06944e6242c2d2",
+      "size": 2271
+    },
+    {
+      "path": "tests/run_tests.sh",
+      "sha256": "011387f18553e6279f6aee7504ef24521dd7ae0443d15abd26506bafa28e7cba",
+      "size": 444
+    },
+    {
+      "path": "tests/test_phase17.c",
+      "sha256": "38810afb7287cb75f2776afa49a5fdfa3d1e2db19cb8cc57e33dfdc3ac0eed64",
+      "size": 2318
+    },
+    {
+      "path": "tools/benchmark_smoke.py",
+      "sha256": "b660768365e176c79f8ffa6622ebfd236a2ae66a43487504b1611c8800d5a9fc",
+      "size": 1303
+    },
+    {
+      "path": "tools/make_manifest.py",
+      "sha256": "4cb5ed70b044948e07d3108be70ff36c5f0edd9a4a4a4c2adb5fc33e4b5f06dd",
+      "size": 1453
+    },
+    {
+      "path": "tools/release_gate.py",
+      "sha256": "b1d68585487ec57dce6e92f2be69a5bcd80121902ac9dc8c40934906234a3cd9",
+      "size": 1486
+    },
+    {
+      "path": "tools/verify_manifest.py",
+      "sha256": "dd38265353fe7e0fcf45b0baa844c913fd282b271c433c071cf247c15c0fd2ba",
+      "size": 1164
+    }
+  ],
+  "phase": 17,
+  "project": "Nexora",
+  "schema": 1
+}

@@ -1,0 +1,1962 @@
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/Makefile nexora_phase14/aikernel-starter/Makefile
+--- nexora_original/aikernel-starter/Makefile	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/Makefile	2026-09-20 14:50:16.817620287 +0000
+@@ -2,36 +2,56 @@
+ LD      ?= ld
+ QEMU    ?= qemu-system-x86_64
+ 
+-BUILD   := build
+-ISO_DIR := $(BUILD)/iso
+-KERNEL  := $(BUILD)/kernel.elf
+-ISO     := $(BUILD)/aikernel.iso
++BUILD      := build
++HOST_BUILD := build-host
++ISO_DIR    := $(BUILD)/iso
++KERNEL     := $(BUILD)/kernel.elf
++ISO        := $(BUILD)/aikernel.iso
++HOST_TEST  := $(HOST_BUILD)/phase14_tests
++HOST_REPORT := $(HOST_BUILD)/phase14_report
+ 
+ CFLAGS  := -std=c11 -O2 -Wall -Wextra -Werror \
+            -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
+            -m64 -mno-red-zone \
+            -Iinclude
+ 
++HOST_CFLAGS := -std=c11 -O2 -Wall -Wextra -Werror -Iinclude
+ ASFLAGS := -m64 -ffreestanding -fno-pic -fno-pie
+-
+ LDFLAGS := -nostdlib -z max-page-size=0x1000 -T linker.ld
+ 
++AI_SOURCES := \
++	src/ai/tensor.c \
++	src/ai/work.c \
++	src/ai/capability.c \
++	src/ai/scheduler.c \
++	src/ai/benchmark.c \
++	src/ai/integration.c
++
+ C_SOURCES := \
+ 	src/kernel/kmain.c \
+ 	src/kernel/printk.c \
+ 	src/kernel/panic.c \
+ 	src/mm/bump.c \
+-	src/ai/tensor.c \
+-	src/ai/work.c \
+-	src/ai/capability.c \
+-	src/ai/scheduler.c
++	$(AI_SOURCES)
+ 
+ ASM_SOURCES := src/arch/x86_64/boot.S
+ 
+ OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(C_SOURCES)) \
+            $(patsubst %.S,$(BUILD)/%.o,$(ASM_SOURCES))
+ 
+-.PHONY: all clean run debug check
++HOST_TEST_SOURCES := \
++	tests/test_phase14.c \
++	tests/host_panic.c \
++	src/mm/bump.c \
++	$(AI_SOURCES)
++
++HOST_REPORT_SOURCES := \
++	tests/phase14_report.c \
++	tests/host_panic.c \
++	src/mm/bump.c \
++	$(AI_SOURCES)
++
++.PHONY: all clean run debug check test-host phase14-report verify-phase14
+ 
+ all: $(ISO)
+ 
+@@ -64,6 +84,24 @@
+ 	grub-mkrescue -o $(ISO) $(ISO_DIR) >/dev/null 2>&1
+ 	@echo "Built $(ISO)"
+ 
++$(HOST_TEST): $(HOST_TEST_SOURCES)
++	@mkdir -p $(HOST_BUILD)
++	$(CC) $(HOST_CFLAGS) $(HOST_TEST_SOURCES) -o $@
++
++# Runs the Phase 14 integration/stress suite without requiring GRUB or QEMU.
++test-host: $(HOST_TEST)
++	./$(HOST_TEST)
++
++$(HOST_REPORT): $(HOST_REPORT_SOURCES)
++	@mkdir -p $(HOST_BUILD)
++	@$(CC) $(HOST_CFLAGS) $(HOST_REPORT_SOURCES) -o $@
++
++phase14-report: $(HOST_REPORT)
++	@./$(HOST_REPORT)
++
++verify-phase14: test-host $(KERNEL)
++	@echo "Phase 14 host tests and freestanding kernel link passed."
++
+ run: $(ISO)
+ 	$(QEMU) \
+ 		-m 512M \
+@@ -86,4 +124,4 @@
+ 		-S -s
+ 
+ clean:
+-	rm -rf $(BUILD)
++	rm -rf $(BUILD) $(HOST_BUILD)
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/Nexora_Phase14.patch nexora_phase14/aikernel-starter/Nexora_Phase14.patch
+--- nexora_original/aikernel-starter/Nexora_Phase14.patch	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/Nexora_Phase14.patch	2026-09-20 14:50:34.405996120 +0000
+@@ -0,0 +1,101 @@
++diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/Makefile nexora_phase14/aikernel-starter/Makefile
++--- nexora_original/aikernel-starter/Makefile	2026-09-18 05:29:28.000000000 +0000
+++++ nexora_phase14/aikernel-starter/Makefile	2026-09-20 14:50:16.817620287 +0000
++@@ -2,36 +2,56 @@
++ LD      ?= ld
++ QEMU    ?= qemu-system-x86_64
++ 
++-BUILD   := build
++-ISO_DIR := $(BUILD)/iso
++-KERNEL  := $(BUILD)/kernel.elf
++-ISO     := $(BUILD)/aikernel.iso
+++BUILD      := build
+++HOST_BUILD := build-host
+++ISO_DIR    := $(BUILD)/iso
+++KERNEL     := $(BUILD)/kernel.elf
+++ISO        := $(BUILD)/aikernel.iso
+++HOST_TEST  := $(HOST_BUILD)/phase14_tests
+++HOST_REPORT := $(HOST_BUILD)/phase14_report
++ 
++ CFLAGS  := -std=c11 -O2 -Wall -Wextra -Werror \
++            -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
++            -m64 -mno-red-zone \
++            -Iinclude
++ 
+++HOST_CFLAGS := -std=c11 -O2 -Wall -Wextra -Werror -Iinclude
++ ASFLAGS := -m64 -ffreestanding -fno-pic -fno-pie
++-
++ LDFLAGS := -nostdlib -z max-page-size=0x1000 -T linker.ld
++ 
+++AI_SOURCES := \
+++	src/ai/tensor.c \
+++	src/ai/work.c \
+++	src/ai/capability.c \
+++	src/ai/scheduler.c \
+++	src/ai/benchmark.c \
+++	src/ai/integration.c
+++
++ C_SOURCES := \
++ 	src/kernel/kmain.c \
++ 	src/kernel/printk.c \
++ 	src/kernel/panic.c \
++ 	src/mm/bump.c \
++-	src/ai/tensor.c \
++-	src/ai/work.c \
++-	src/ai/capability.c \
++-	src/ai/scheduler.c
+++	$(AI_SOURCES)
++ 
++ ASM_SOURCES := src/arch/x86_64/boot.S
++ 
++ OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(C_SOURCES)) \
++            $(patsubst %.S,$(BUILD)/%.o,$(ASM_SOURCES))
++ 
++-.PHONY: all clean run debug check
+++HOST_TEST_SOURCES := \
+++	tests/test_phase14.c \
+++	tests/host_panic.c \
+++	src/mm/bump.c \
+++	$(AI_SOURCES)
+++
+++HOST_REPORT_SOURCES := \
+++	tests/phase14_report.c \
+++	tests/host_panic.c \
+++	src/mm/bump.c \
+++	$(AI_SOURCES)
+++
+++.PHONY: all clean run debug check test-host phase14-report verify-phase14
++ 
++ all: $(ISO)
++ 
++@@ -64,6 +84,24 @@
++ 	grub-mkrescue -o $(ISO) $(ISO_DIR) >/dev/null 2>&1
++ 	@echo "Built $(ISO)"
++ 
+++$(HOST_TEST): $(HOST_TEST_SOURCES)
+++	@mkdir -p $(HOST_BUILD)
+++	$(CC) $(HOST_CFLAGS) $(HOST_TEST_SOURCES) -o $@
+++
+++# Runs the Phase 14 integration/stress suite without requiring GRUB or QEMU.
+++test-host: $(HOST_TEST)
+++	./$(HOST_TEST)
+++
+++$(HOST_REPORT): $(HOST_REPORT_SOURCES)
+++	@mkdir -p $(HOST_BUILD)
+++	@$(CC) $(HOST_CFLAGS) $(HOST_REPORT_SOURCES) -o $@
+++
+++phase14-report: $(HOST_REPORT)
+++	@./$(HOST_REPORT)
+++
+++verify-phase14: test-host $(KERNEL)
+++	@echo "Phase 14 host tests and freestanding kernel link passed."
+++
++ run: $(ISO)
++ 	$(QEMU) \
++ 		-m 512M \
++@@ -86,4 +124,4 @@
++ 		-S -s
++ 
++ clean:
++-	rm -rf $(BUILD)
+++	rm -rf $(BUILD) $(HOST_BUILD)
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/PHASE14_PORTING.md nexora_phase14/aikernel-starter/PHASE14_PORTING.md
+--- nexora_original/aikernel-starter/PHASE14_PORTING.md	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/PHASE14_PORTING.md	2026-09-20 14:49:20.119941788 +0000
+@@ -0,0 +1,46 @@
++# Porting Phase 14 onto the current Nexora Phase 13 branch
++
++The source package in this archive was built from the `aikernel-starter.zip` that was
++accessible to this conversation. If your Phase 13 branch contains newer implementations
++of these modules, port the Phase 14 changes by behavior rather than overwriting newer
++subsystems wholesale.
++
++## New files that are normally safe to add
++
++- `include/ai/benchmark.h`
++- `include/ai/integration.h`
++- `src/ai/benchmark.c`
++- `src/ai/integration.c`
++- `tests/host_panic.c`
++- `tests/test_phase14.c`
++- `docs/PHASE14.md`
++- `docs/PHASE14_TEST_REPORT.md`
++
++## Existing modules touched
++
++- `include/kernel/types.h`
++- `include/kernel/memory.h`
++- `src/mm/bump.c`
++- `include/ai/tensor.h`
++- `src/ai/tensor.c`
++- `include/ai/work.h`
++- `src/ai/work.c`
++- `include/ai/scheduler.h`
++- `src/ai/scheduler.c`
++- `src/kernel/kmain.c`
++- `Makefile`
++- `docs/ROADMAP.md`
++
++If Phase 13 already has a real heap, timer, distributed graph model, or richer
++scheduler, adapt the metrics and validators to those APIs rather than replacing them
++with the starter implementation.
++
++## Required semantic behavior after porting
++
++1. Graph validation rejects structural corruption and cycles.
++2. Scheduler exposes completion/deadlock rather than silently stalling.
++3. Tensor-byte and memory-allocation accounting are queryable.
++4. Capability allow/deny checks are covered by integration tests.
++5. A deterministic benchmark produces machine-comparable counters.
++6. A repeated end-to-end stress workload is part of the test gate.
++7. The kernel build remains warning-clean.
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/README.md nexora_phase14/aikernel-starter/README.md
+--- nexora_original/aikernel-starter/README.md	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/README.md	2026-09-20 14:49:20.120012791 +0000
+@@ -152,3 +152,21 @@
+ Do **not** attempt GPU-driver development first. Prove one architectural advantage before expanding hardware support.
+ 
+ See `docs/ROADMAP.md`.
++
++## Phase 14 validation commands
++
++The Phase 14 branch adds a host-side integration/stress harness that does not require
++GRUB or QEMU:
++
++```bash
++make test-host
++```
++
++To run the host suite and also compile/link the freestanding kernel:
++
++```bash
++make verify-phase14
++```
++
++The boot path also runs the Phase 14 self-test and panics if the validation gate fails.
++See `docs/PHASE14.md` and `docs/PHASE14_TEST_REPORT.md`.
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/docs/PHASE14.md nexora_phase14/aikernel-starter/docs/PHASE14.md
+--- nexora_original/aikernel-starter/docs/PHASE14.md	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/docs/PHASE14.md	2026-09-20 14:49:20.118193708 +0000
+@@ -0,0 +1,128 @@
++# Nexora Phase 14 — Integration, Validation, Benchmarking, and Stability
++
++## Objective
++
++Phase 14 is a correctness and integration gate. It adds executable evidence that the
++kernel's AI-native primitives can be composed safely before the project expands into
++real accelerator execution.
++
++## Implemented components
++
++### 1. Work-graph validation
++
++`ai_work_graph_validate()` now checks:
++
++- null graph nodes
++- duplicate node IDs
++- missing dependencies
++- self-dependencies
++- duplicate dependencies
++- invalid/null tensor references
++- empty device masks
++- dependency cycles
++
++Cycle detection is bounded by `AI_MAX_WORK_NODES` and performs no dynamic allocation.
++
++### 2. Scheduler completion and deadlock detection
++
++The scheduler now tracks:
++
++- dispatch count
++- pick count
++- candidate-node scans
++- deadlock count
++
++`ai_scheduler_run_to_completion()` executes the simulated graph until completion or
++returns a structured deadlock report when no runnable node exists.
++
++The scheduler remains a simulator: marking a work node done does not execute a real
++CPU/GPU/NPU operator.
++
++### 3. Tensor accounting and validation
++
++Tensor creation now rejects:
++
++- null names/shapes
++- zero dimensions
++- invalid rank/dtype/location
++- integer overflow in element or byte calculation
++
++Runtime accounting exposes:
++
++- tensor count
++- total tensor bytes
++- bytes per tensor location
++
++### 4. Early-heap accounting
++
++The bump allocator now exposes:
++
++- used/capacity
++- allocation count
++- requested bytes
++- alignment padding
++- high-water mark
++- preflight allocation feasibility
++
++Non-power-of-two alignment is rejected.
++
++### 5. Deterministic scheduler benchmark
++
++`ai_benchmark_run()` executes four chain scenarios with:
++
++- 4 nodes
++- 8 nodes
++- 16 nodes
++- 32 nodes
++
++It records graph nodes/edges, dispatches, picks, and candidate scans. This is a
++reproducible algorithmic-overhead benchmark, not a wall-clock benchmark.
++
++### 6. End-to-end Phase 14 stress suite
++
++`ai_phase14_run()` validates:
++
++- tensor accounting
++- priority/deadline scheduler behavior
++- dependency refresh
++- cyclic-graph rejection
++- runtime deadlock detection
++- capability denial/allow behavior
++- 48 repeated transfer → compute → activation DAGs
++- benchmark completion
++- memory-accounting invariants
++
++On the kernel boot path, Phase 14 is a gate: a failed report triggers `panic()`.
++
++### 7. Host regression harness
++
++`make test-host` compiles the same allocator and AI runtime sources into a normal
++host executable and runs 60 assertions. This provides fast validation without GRUB,
++QEMU, or an ISO toolchain.
++
++`make verify-phase14` runs the host suite and links the freestanding kernel ELF.
++
++## Acceptance criteria
++
++Phase 14 is considered successful when:
++
++1. host regression suite passes with zero failures;
++2. ASan/UBSan execution is clean;
++3. kernel sources compile with `-Wall -Wextra -Werror`;
++4. the freestanding x86-64 kernel links with no unresolved symbols;
++5. all 48 end-to-end stress rounds complete;
++6. the deliberate cyclic graph is detected by both validator and scheduler;
++7. capability checks deny rights not present in the capability bitset;
++8. early-heap accounting remains internally consistent.
++
++## Important scope limitation
++
++The Phase 12/13 project ZIP was not accessible in the current conversation file
++surface. This implementation therefore uses the available `aikernel-starter.zip` as
++the concrete source base. The Phase 14 modules were deliberately kept additive and
++bounded so they can be ported into the current Phase 13 branch with minimal API
++conflict.
++
++This package must not be interpreted as proving that unavailable Phase 11–13 code was
++integration-tested. It proves the Phase 14 mechanisms against the source tree actually
++available for verification.
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/docs/PHASE14_PROVENANCE.md nexora_phase14/aikernel-starter/docs/PHASE14_PROVENANCE.md
+--- nexora_original/aikernel-starter/docs/PHASE14_PROVENANCE.md	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/docs/PHASE14_PROVENANCE.md	2026-09-20 14:50:33.709142380 +0000
+@@ -0,0 +1,14 @@
++# Phase 14 Source Provenance
++
++Concrete source base available to this conversation:
++
++- File: `aikernel-starter.zip`
++- SHA-256: `6ac1ac67de7cc0770a187afc6bdc06083af0681e0f7243826f035e0ee75776b6`
++
++The more recent Phase 12/13 ZIP referenced in earlier project threads was not exposed in
++the current conversation's accessible file surface. Phase 14 was therefore implemented
++and verified against the source base above.
++
++The archive includes `Nexora_Phase14.patch` plus `PHASE14_PORTING.md` so the new
++validation layer can be ported to the current Phase 13 tree without treating this older
++base as authoritative for subsystems that Phase 11–13 may already have replaced.
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/docs/PHASE14_TEST_REPORT.md nexora_phase14/aikernel-starter/docs/PHASE14_TEST_REPORT.md
+--- nexora_original/aikernel-starter/docs/PHASE14_TEST_REPORT.md	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/docs/PHASE14_TEST_REPORT.md	2026-09-20 14:49:20.119157674 +0000
+@@ -0,0 +1,69 @@
++# Phase 14 Verification Report
++
++## Verification performed
++
++### Host regression suite
++
++Command:
++
++```text
++make test-host
++```
++
++Result:
++
++```text
++PASS — 60/60 assertions
++```
++
++Covered areas:
++
++- tensor validation and byte accounting
++- graph validation
++- missing dependency rejection
++- cycle detection
++- scheduler priority/deadline ordering
++- completion accounting
++- deadlock detection
++- capability allow/deny behavior
++- allocator accounting/alignment behavior
++- deterministic benchmark invariants
++- full Phase 14 stress suite
++
++### Sanitizer verification
++
++The host suite was rebuilt with:
++
++```text
++-fsanitize=address,undefined -fno-omit-frame-pointer
++```
++
++Result: **PASS** with no ASan/UBSan findings.
++
++### Freestanding kernel build
++
++The kernel was compiled using the project freestanding flags with warnings treated as
++errors and linked successfully as an ELF64 x86-64 executable.
++
++Result: **PASS**.
++
++`nm -u build/kernel.elf` reported no unresolved symbols.
++
++### GRUB/QEMU execution
++
++Not executed in this environment because `grub-file`, `grub-mkrescue`, `xorriso`, and
++`qemu-system-x86_64` were not installed. Kernel boot/ISO execution therefore remains a
++required environment-specific verification step.
++
++## Phase 14 stress parameters
++
++- End-to-end stress rounds: 48
++- Graph per stress round: transfer → matmul → activation
++- Benchmark graph sizes: 4, 8, 16, 32 nodes
++- Deliberate deadlock case: two-node dependency cycle
++
++## Result
++
++Phase 14 code-level validation: **PASS**.
++
++Hardware/boot validation: **not executed in this environment**.
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/docs/ROADMAP.md nexora_phase14/aikernel-starter/docs/ROADMAP.md
+--- nexora_original/aikernel-starter/docs/ROADMAP.md	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/docs/ROADMAP.md	2026-09-20 14:49:20.116012681 +0000
+@@ -177,3 +177,44 @@
+ ```
+ 
+ The security model should be measurable and formally specified before being trusted.
++
++---
++
++## Phase 14 — Full-system integration, validation, and stability
++
++Status: **implemented in the Phase 14 validation branch**
++
++This is a post-roadmap integration phase. Its purpose is to prove that the existing
++AI-native primitives behave coherently before adding another large subsystem.
++
++Implemented validation surfaces:
++
++- work-graph structural validation
++- missing/self/duplicate dependency detection
++- DAG cycle detection
++- scheduler deadlock detection
++- deterministic scheduler accounting (picks, dispatches, candidate scans)
++- tensor size/location accounting
++- allocation accounting and high-water tracking
++- capability isolation checks
++- repeated end-to-end graph stress execution
++- host-side regression suite using the same core C sources as the kernel
++- freestanding kernel self-test gate during boot
++
++Current deterministic benchmark scenarios use 4, 8, 16, and 32-node chains. They
++measure scheduler work in candidate scans rather than wall-clock latency because the
++original starter substrate does not yet expose a calibrated monotonic clock to this
++branch.
++
++Exit criteria for this implementation:
++
++- all Phase 14 host regression tests pass
++- sanitizer pass is clean
++- freestanding kernel compiles and links with warnings treated as errors
++- malformed/cyclic graphs are rejected
++- scheduler deadlock is surfaced rather than silently stalling
++- 48 repeated end-to-end stress rounds complete
++- memory accounting remains within the early-heap capacity
++
++A later hardware/runtime phase should add calibrated latency, throughput, tail-latency,
++DMA, accelerator, and real workload benchmarks once those facilities are available.
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/include/ai/benchmark.h nexora_phase14/aikernel-starter/include/ai/benchmark.h
+--- nexora_original/aikernel-starter/include/ai/benchmark.h	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/include/ai/benchmark.h	2026-09-20 14:47:13.038332201 +0000
+@@ -0,0 +1,20 @@
++#ifndef AIKERNEL_AI_BENCHMARK_H
++#define AIKERNEL_AI_BENCHMARK_H
++
++#include <kernel/types.h>
++
++typedef struct {
++    bool passed;
++    u32 scenarios_run;
++    u32 scenarios_completed;
++    u32 nodes_total;
++    u32 edges_total;
++    u64 dispatches;
++    u64 picks;
++    u64 candidates_scanned;
++    u64 selection_efficiency_ppm;
++} ai_benchmark_report;
++
++bool ai_benchmark_run(ai_benchmark_report *report);
++
++#endif
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/include/ai/integration.h nexora_phase14/aikernel-starter/include/ai/integration.h
+--- nexora_original/aikernel-starter/include/ai/integration.h	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/include/ai/integration.h	2026-09-20 14:47:13.039934591 +0000
+@@ -0,0 +1,32 @@
++#ifndef AIKERNEL_AI_INTEGRATION_H
++#define AIKERNEL_AI_INTEGRATION_H
++
++#include <kernel/types.h>
++#include <ai/benchmark.h>
++
++#define AI_PHASE14_STRESS_ROUNDS 48
++
++typedef struct {
++    bool passed;
++    u32 assertions;
++    u32 assertions_passed;
++    u32 assertions_failed;
++    u32 graphs_validated;
++    u32 graphs_completed;
++    u32 deadlocks_detected;
++    u32 stress_rounds_completed;
++    u64 scheduler_dispatches;
++    u64 tensor_bytes_accounted;
++    u64 heap_before;
++    u64 heap_after;
++    u64 heap_growth;
++    bool capability_isolation_ok;
++    bool deadlock_detection_ok;
++    bool tensor_accounting_ok;
++    bool memory_accounting_ok;
++    ai_benchmark_report benchmark;
++} ai_phase14_report;
++
++bool ai_phase14_run(ai_phase14_report *report);
++
++#endif
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/include/ai/scheduler.h nexora_phase14/aikernel-starter/include/ai/scheduler.h
+--- nexora_original/aikernel-starter/include/ai/scheduler.h	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/include/ai/scheduler.h	2026-09-20 14:46:25.456765831 +0000
+@@ -6,11 +6,26 @@
+ typedef struct {
+     ai_work_graph *graph;
+     u64 dispatch_count;
++    u64 pick_count;
++    u64 candidate_scan_count;
++    u64 deadlock_count;
+ } ai_scheduler;
+ 
++typedef struct {
++    bool completed;
++    bool deadlocked;
++    u32 completed_nodes;
++    u32 failed_nodes;
++    u64 dispatches;
++    u64 picks;
++    u64 candidates_scanned;
++} ai_scheduler_run_report;
++
+ void ai_scheduler_init(ai_scheduler *scheduler, ai_work_graph *graph);
+ ai_work_node *ai_scheduler_pick(ai_scheduler *scheduler);
+ void ai_scheduler_mark_running(ai_scheduler *scheduler, ai_work_node *node);
+ void ai_scheduler_mark_done(ai_scheduler *scheduler, ai_work_node *node);
++void ai_scheduler_mark_failed(ai_scheduler *scheduler, ai_work_node *node);
++bool ai_scheduler_run_to_completion(ai_scheduler *scheduler, ai_scheduler_run_report *report);
+ 
+ #endif
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/include/ai/tensor.h nexora_phase14/aikernel-starter/include/ai/tensor.h
+--- nexora_original/aikernel-starter/include/ai/tensor.h	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/include/ai/tensor.h	2026-09-20 14:45:44.929524107 +0000
+@@ -52,6 +52,9 @@
+     u32 flags
+ );
+ u64 ai_tensor_count(void);
++u64 ai_tensor_total_bytes(void);
++u64 ai_tensor_bytes_at_location(ai_tensor_location location);
++bool ai_tensor_validate(const ai_tensor *tensor);
+ const char *ai_dtype_name(ai_dtype dtype);
+ const char *ai_location_name(ai_tensor_location location);
+ 
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/include/ai/work.h nexora_phase14/aikernel-starter/include/ai/work.h
+--- nexora_original/aikernel-starter/include/ai/work.h	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/include/ai/work.h	2026-09-20 14:46:25.454935045 +0000
+@@ -55,6 +55,20 @@
+     u64 next_id;
+ } ai_work_graph;
+ 
++typedef struct {
++    bool valid;
++    u32 node_count;
++    u32 edge_count;
++    u32 null_nodes;
++    u32 duplicate_ids;
++    u32 missing_dependencies;
++    u32 self_dependencies;
++    u32 duplicate_dependencies;
++    u32 null_tensors;
++    u32 invalid_device_masks;
++    u32 cycle_nodes;
++} ai_graph_validation;
++
+ void ai_work_graph_init(ai_work_graph *graph);
+ 
+ ai_work_node *ai_work_add(
+@@ -72,6 +86,8 @@
+ 
+ bool ai_work_dependencies_done(const ai_work_graph *graph, const ai_work_node *node);
+ void ai_work_refresh_states(ai_work_graph *graph);
++bool ai_work_graph_validate(const ai_work_graph *graph, ai_graph_validation *result);
++u32 ai_work_graph_done_count(const ai_work_graph *graph);
+ const char *ai_work_state_name(ai_work_state state);
+ const char *ai_op_name(ai_op op);
+ 
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/include/kernel/memory.h nexora_phase14/aikernel-starter/include/kernel/memory.h
+--- nexora_original/aikernel-starter/include/kernel/memory.h	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/include/kernel/memory.h	2026-09-20 14:45:44.926925071 +0000
+@@ -3,9 +3,20 @@
+ 
+ #include <kernel/types.h>
+ 
++typedef struct {
++    usize used;
++    usize capacity;
++    usize allocations;
++    usize requested_bytes;
++    usize padding_bytes;
++    usize high_watermark;
++} early_heap_stats;
++
+ void  early_heap_init(void);
+ void *kalloc(usize size, usize alignment);
+ usize early_heap_used(void);
+ usize early_heap_capacity(void);
++bool  early_heap_can_alloc(usize size, usize alignment);
++void  early_heap_get_stats(early_heap_stats *out);
+ 
+ #endif
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/include/kernel/types.h nexora_phase14/aikernel-starter/include/kernel/types.h
+--- nexora_original/aikernel-starter/include/kernel/types.h	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/include/kernel/types.h	2026-09-20 14:45:44.927741789 +0000
+@@ -19,6 +19,8 @@
+     true = 1
+ } bool;
+ 
++#ifndef NULL
+ #define NULL ((void*)0)
++#endif
+ 
+ #endif
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/src/ai/benchmark.c nexora_phase14/aikernel-starter/src/ai/benchmark.c
+--- nexora_original/aikernel-starter/src/ai/benchmark.c	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/src/ai/benchmark.c	2026-09-20 14:47:13.039188684 +0000
+@@ -0,0 +1,68 @@
++#include <ai/benchmark.h>
++#include <ai/work.h>
++#include <ai/scheduler.h>
++
++static bool run_chain(u32 node_count, ai_benchmark_report *report) {
++    ai_work_graph graph;
++    ai_work_graph_init(&graph);
++
++    ai_work_node *previous = NULL;
++    for (u32 i = 0; i < node_count; ++i) {
++        u32 priority = (i % 3u) == 0u ? 100u : (50u + i);
++        ai_work_node *node = ai_work_add(
++            &graph,
++            "benchmark-node",
++            AI_OP_CUSTOM,
++            priority,
++            1000000ull + (u64)(node_count - i) * 1000ull,
++            AI_DEVICE_CPU | AI_DEVICE_GPU
++        );
++        if (previous) ai_work_add_dependency(node, previous->id);
++        previous = node;
++    }
++
++    ai_graph_validation validation;
++    if (!ai_work_graph_validate(&graph, &validation)) return false;
++
++    ai_scheduler scheduler;
++    ai_scheduler_run_report run;
++    ai_scheduler_init(&scheduler, &graph);
++    if (!ai_scheduler_run_to_completion(&scheduler, &run)) return false;
++
++    report->nodes_total += validation.node_count;
++    report->edges_total += validation.edge_count;
++    report->dispatches += run.dispatches;
++    report->picks += run.picks;
++    report->candidates_scanned += run.candidates_scanned;
++    return run.completed_nodes == node_count;
++}
++
++bool ai_benchmark_run(ai_benchmark_report *report) {
++    if (!report) return false;
++
++    report->passed = false;
++    report->scenarios_run = 0;
++    report->scenarios_completed = 0;
++    report->nodes_total = 0;
++    report->edges_total = 0;
++    report->dispatches = 0;
++    report->picks = 0;
++    report->candidates_scanned = 0;
++    report->selection_efficiency_ppm = 0;
++
++    const u32 sizes[] = {4, 8, 16, 32};
++    for (u32 i = 0; i < (u32)(sizeof(sizes) / sizeof(sizes[0])); ++i) {
++        report->scenarios_run++;
++        if (run_chain(sizes[i], report)) {
++            report->scenarios_completed++;
++        }
++    }
++
++    if (report->candidates_scanned != 0) {
++        report->selection_efficiency_ppm =
++            (report->dispatches * 1000000ull) / report->candidates_scanned;
++    }
++
++    report->passed = report->scenarios_completed == report->scenarios_run;
++    return report->passed;
++}
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/src/ai/integration.c nexora_phase14/aikernel-starter/src/ai/integration.c
+--- nexora_original/aikernel-starter/src/ai/integration.c	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/src/ai/integration.c	2026-09-20 14:47:13.040714620 +0000
+@@ -0,0 +1,240 @@
++#include <ai/integration.h>
++#include <ai/capability.h>
++#include <ai/scheduler.h>
++#include <ai/tensor.h>
++#include <ai/work.h>
++#include <kernel/memory.h>
++
++static void check(ai_phase14_report *report, bool condition) {
++    report->assertions++;
++    if (condition) report->assertions_passed++;
++    else report->assertions_failed++;
++}
++
++static bool tensor_accounting_case(ai_phase14_report *report) {
++    ai_tensor_system_init();
++    u64 a_shape[2] = {2, 4};
++    u64 b_shape[2] = {4, 4};
++
++    ai_tensor *a = ai_tensor_create(
++        "phase14-a", AI_DTYPE_F16, 2, a_shape,
++        AI_LOC_CPU_RAM, AI_TENSOR_EPHEMERAL
++    );
++    ai_tensor *b = ai_tensor_create(
++        "phase14-b", AI_DTYPE_F32, 2, b_shape,
++        AI_LOC_GPU_HBM, AI_TENSOR_PERSISTENT | AI_TENSOR_READONLY
++    );
++
++    bool ok = true;
++    ok = ok && ai_tensor_validate(a);
++    ok = ok && ai_tensor_validate(b);
++    ok = ok && ai_tensor_count() == 2;
++    ok = ok && a->bytes == 16;
++    ok = ok && b->bytes == 64;
++    ok = ok && ai_tensor_total_bytes() == 80;
++    ok = ok && ai_tensor_bytes_at_location(AI_LOC_CPU_RAM) == 16;
++    ok = ok && ai_tensor_bytes_at_location(AI_LOC_GPU_HBM) == 64;
++
++    report->tensor_bytes_accounted += ai_tensor_total_bytes();
++    report->tensor_accounting_ok = ok;
++    return ok;
++}
++
++static bool scheduler_and_graph_case(ai_phase14_report *report) {
++    ai_work_graph graph;
++    ai_work_graph_init(&graph);
++
++    ai_work_node *low = ai_work_add(
++        &graph, "low", AI_OP_NOOP, 10, 2000, AI_DEVICE_CPU
++    );
++    ai_work_node *high = ai_work_add(
++        &graph, "high", AI_OP_NOOP, 100, 3000, AI_DEVICE_CPU
++    );
++    ai_work_node *after_high = ai_work_add(
++        &graph, "after-high", AI_OP_NOOP, 90, 1000, AI_DEVICE_CPU
++    );
++    ai_work_add_dependency(after_high, high->id);
++
++    ai_graph_validation validation;
++    bool valid = ai_work_graph_validate(&graph, &validation);
++    if (valid) report->graphs_validated++;
++
++    ai_scheduler scheduler;
++    ai_scheduler_init(&scheduler, &graph);
++
++    ai_work_node *first = ai_scheduler_pick(&scheduler);
++    bool priority_ok = first == high;
++    if (first) {
++        ai_scheduler_mark_running(&scheduler, first);
++        ai_scheduler_mark_done(&scheduler, first);
++    }
++
++    ai_work_node *second = ai_scheduler_pick(&scheduler);
++    bool dependency_refresh_ok = second == after_high;
++    if (second) {
++        ai_scheduler_mark_running(&scheduler, second);
++        ai_scheduler_mark_done(&scheduler, second);
++    }
++
++    ai_scheduler_run_report run;
++    bool complete = ai_scheduler_run_to_completion(&scheduler, &run);
++    if (complete) report->graphs_completed++;
++    report->scheduler_dispatches += scheduler.dispatch_count;
++
++    return valid && validation.edge_count == 1 && priority_ok &&
++           dependency_refresh_ok && complete &&
++           ai_work_graph_done_count(&graph) == 3 && low->state == AI_WORK_DONE;
++}
++
++static bool deadlock_case(ai_phase14_report *report) {
++    ai_work_graph graph;
++    ai_work_graph_init(&graph);
++    ai_work_node *a = ai_work_add(
++        &graph, "cycle-a", AI_OP_CUSTOM, 1, 100, AI_DEVICE_CPU
++    );
++    ai_work_node *b = ai_work_add(
++        &graph, "cycle-b", AI_OP_CUSTOM, 1, 100, AI_DEVICE_CPU
++    );
++    ai_work_add_dependency(a, b->id);
++    ai_work_add_dependency(b, a->id);
++
++    ai_graph_validation validation;
++    bool validator_rejects = !ai_work_graph_validate(&graph, &validation) &&
++                             validation.cycle_nodes == 2;
++
++    ai_scheduler scheduler;
++    ai_scheduler_run_report run;
++    ai_scheduler_init(&scheduler, &graph);
++    bool scheduler_rejects = !ai_scheduler_run_to_completion(&scheduler, &run) &&
++                             run.deadlocked;
++    if (scheduler_rejects) report->deadlocks_detected++;
++
++    report->deadlock_detection_ok = validator_rejects && scheduler_rejects;
++    return report->deadlock_detection_ok;
++}
++
++static bool capability_case(ai_phase14_report *report) {
++    ai_capability agent = ai_cap_create(
++        42,
++        AI_CAP_TENSOR_READ | AI_CAP_MODEL_USE | AI_CAP_GPU_USE
++    );
++
++    bool ok = ai_cap_has(&agent, AI_CAP_TENSOR_READ) &&
++              ai_cap_has(&agent, AI_CAP_MODEL_USE) &&
++              ai_cap_has(&agent, AI_CAP_GPU_USE) &&
++              !ai_cap_has(&agent, AI_CAP_TENSOR_WRITE) &&
++              !ai_cap_has(&agent, AI_CAP_NETWORK) &&
++              !ai_cap_has(&agent, AI_CAP_ADMIN);
++    report->capability_isolation_ok = ok;
++    return ok;
++}
++
++static bool stress_round(ai_phase14_report *report, u32 round) {
++    ai_tensor_system_init();
++    u64 shape[2] = {1, 64 + (u64)(round % 8u) * 16ull};
++
++    ai_tensor *input = ai_tensor_create(
++        "stress-input", AI_DTYPE_F16, 2, shape,
++        AI_LOC_CPU_RAM, AI_TENSOR_EPHEMERAL
++    );
++    ai_tensor *hidden = ai_tensor_create(
++        "stress-hidden", AI_DTYPE_F16, 2, shape,
++        AI_LOC_GPU_HBM, AI_TENSOR_EPHEMERAL
++    );
++    ai_tensor *output = ai_tensor_create(
++        "stress-output", AI_DTYPE_F16, 2, shape,
++        AI_LOC_GPU_HBM, AI_TENSOR_EPHEMERAL
++    );
++
++    ai_work_graph graph;
++    ai_work_graph_init(&graph);
++    ai_work_node *load = ai_work_add(
++        &graph, "stress-load", AI_OP_TRANSFER, 80, 3000,
++        AI_DEVICE_CPU | AI_DEVICE_GPU
++    );
++    ai_work_add_input(load, input);
++    ai_work_add_output(load, hidden);
++
++    ai_work_node *compute = ai_work_add(
++        &graph, "stress-compute", AI_OP_MATMUL, 100, 2000,
++        AI_DEVICE_GPU
++    );
++    ai_work_add_dependency(compute, load->id);
++    ai_work_add_input(compute, hidden);
++    ai_work_add_output(compute, output);
++
++    ai_work_node *finish = ai_work_add(
++        &graph, "stress-finish", AI_OP_ACTIVATION, 90, 1000,
++        AI_DEVICE_GPU
++    );
++    ai_work_add_dependency(finish, compute->id);
++    ai_work_add_input(finish, output);
++
++    ai_graph_validation validation;
++    if (!ai_work_graph_validate(&graph, &validation)) return false;
++    report->graphs_validated++;
++
++    ai_scheduler scheduler;
++    ai_scheduler_run_report run;
++    ai_scheduler_init(&scheduler, &graph);
++    if (!ai_scheduler_run_to_completion(&scheduler, &run)) return false;
++    if (run.completed_nodes != 3 || run.deadlocked) return false;
++
++    report->graphs_completed++;
++    report->scheduler_dispatches += run.dispatches;
++    report->tensor_bytes_accounted += ai_tensor_total_bytes();
++    return true;
++}
++
++bool ai_phase14_run(ai_phase14_report *report) {
++    if (!report) return false;
++
++    report->passed = false;
++    report->assertions = 0;
++    report->assertions_passed = 0;
++    report->assertions_failed = 0;
++    report->graphs_validated = 0;
++    report->graphs_completed = 0;
++    report->deadlocks_detected = 0;
++    report->stress_rounds_completed = 0;
++    report->scheduler_dispatches = 0;
++    report->tensor_bytes_accounted = 0;
++    report->heap_before = early_heap_used();
++    report->heap_after = 0;
++    report->heap_growth = 0;
++    report->capability_isolation_ok = false;
++    report->deadlock_detection_ok = false;
++    report->tensor_accounting_ok = false;
++    report->memory_accounting_ok = false;
++
++    check(report, tensor_accounting_case(report));
++    check(report, scheduler_and_graph_case(report));
++    check(report, deadlock_case(report));
++    check(report, capability_case(report));
++
++    for (u32 round = 0; round < AI_PHASE14_STRESS_ROUNDS; ++round) {
++        bool ok = stress_round(report, round);
++        check(report, ok);
++        if (ok) report->stress_rounds_completed++;
++    }
++
++    check(report, ai_benchmark_run(&report->benchmark));
++
++    early_heap_stats stats;
++    early_heap_get_stats(&stats);
++    report->heap_after = stats.used;
++    report->heap_growth = report->heap_after - report->heap_before;
++    report->memory_accounting_ok =
++        stats.used == stats.high_watermark &&
++        stats.used <= stats.capacity &&
++        stats.requested_bytes <= stats.used &&
++        stats.padding_bytes <= stats.used;
++    check(report, report->memory_accounting_ok);
++    check(report, early_heap_can_alloc(64, 16));
++
++    report->passed =
++        report->assertions_failed == 0 &&
++        report->stress_rounds_completed == AI_PHASE14_STRESS_ROUNDS &&
++        report->benchmark.passed;
++    return report->passed;
++}
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/src/ai/scheduler.c nexora_phase14/aikernel-starter/src/ai/scheduler.c
+--- nexora_original/aikernel-starter/src/ai/scheduler.c	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/src/ai/scheduler.c	2026-09-20 14:46:25.457605985 +0000
+@@ -1,20 +1,27 @@
+ #include <ai/scheduler.h>
+ 
+ void ai_scheduler_init(ai_scheduler *scheduler, ai_work_graph *graph) {
++    if (!scheduler) return;
+     scheduler->graph = graph;
+     scheduler->dispatch_count = 0;
+-    ai_work_refresh_states(graph);
++    scheduler->pick_count = 0;
++    scheduler->candidate_scan_count = 0;
++    scheduler->deadlock_count = 0;
++    if (graph) ai_work_refresh_states(graph);
+ }
+ 
+ ai_work_node *ai_scheduler_pick(ai_scheduler *scheduler) {
++    if (!scheduler || !scheduler->graph) return NULL;
+     ai_work_refresh_states(scheduler->graph);
++    scheduler->pick_count++;
+ 
+     ai_work_node *best = NULL;
+ 
+     for (u32 i = 0; i < scheduler->graph->node_count; ++i) {
+         ai_work_node *candidate = scheduler->graph->nodes[i];
++        scheduler->candidate_scan_count++;
+ 
+-        if (candidate->state != AI_WORK_READY) {
++        if (!candidate || candidate->state != AI_WORK_READY) {
+             continue;
+         }
+ 
+@@ -30,7 +37,7 @@
+ }
+ 
+ void ai_scheduler_mark_running(ai_scheduler *scheduler, ai_work_node *node) {
+-    if (!node) return;
++    if (!scheduler || !node) return;
+     node->state = AI_WORK_RUNNING;
+     scheduler->dispatch_count++;
+ }
+@@ -40,3 +47,66 @@
+     if (!node) return;
+     node->state = AI_WORK_DONE;
+ }
++
++void ai_scheduler_mark_failed(ai_scheduler *scheduler, ai_work_node *node) {
++    (void)scheduler;
++    if (!node) return;
++    node->state = AI_WORK_FAILED;
++}
++
++bool ai_scheduler_run_to_completion(ai_scheduler *scheduler, ai_scheduler_run_report *report) {
++    ai_scheduler_run_report local;
++    ai_scheduler_run_report *r = report ? report : &local;
++    r->completed = false;
++    r->deadlocked = false;
++    r->completed_nodes = 0;
++    r->failed_nodes = 0;
++    r->dispatches = 0;
++    r->picks = 0;
++    r->candidates_scanned = 0;
++
++    if (!scheduler || !scheduler->graph) return false;
++
++    u32 max_iterations = scheduler->graph->node_count + 1;
++    for (u32 iteration = 0; iteration < max_iterations; ++iteration) {
++        u32 done = ai_work_graph_done_count(scheduler->graph);
++        u32 failed = 0;
++        for (u32 i = 0; i < scheduler->graph->node_count; ++i) {
++            const ai_work_node *node = scheduler->graph->nodes[i];
++            if (node && node->state == AI_WORK_FAILED) failed++;
++        }
++
++        if (done + failed == scheduler->graph->node_count) {
++            r->completed = failed == 0;
++            r->completed_nodes = done;
++            r->failed_nodes = failed;
++            r->dispatches = scheduler->dispatch_count;
++            r->picks = scheduler->pick_count;
++            r->candidates_scanned = scheduler->candidate_scan_count;
++            return r->completed;
++        }
++
++        ai_work_node *node = ai_scheduler_pick(scheduler);
++        if (!node) {
++            scheduler->deadlock_count++;
++            r->deadlocked = true;
++            r->completed_nodes = done;
++            r->failed_nodes = failed;
++            r->dispatches = scheduler->dispatch_count;
++            r->picks = scheduler->pick_count;
++            r->candidates_scanned = scheduler->candidate_scan_count;
++            return false;
++        }
++
++        ai_scheduler_mark_running(scheduler, node);
++        ai_scheduler_mark_done(scheduler, node);
++    }
++
++    scheduler->deadlock_count++;
++    r->deadlocked = true;
++    r->completed_nodes = ai_work_graph_done_count(scheduler->graph);
++    r->dispatches = scheduler->dispatch_count;
++    r->picks = scheduler->pick_count;
++    r->candidates_scanned = scheduler->candidate_scan_count;
++    return false;
++}
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/src/ai/tensor.c nexora_phase14/aikernel-starter/src/ai/tensor.c
+--- nexora_original/aikernel-starter/src/ai/tensor.c	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/src/ai/tensor.c	2026-09-20 14:45:44.930396184 +0000
+@@ -5,6 +5,8 @@
+ static ai_tensor *registry[AI_MAX_TENSORS];
+ static u64 count = 0;
+ static u64 next_id = 1;
++static u64 total_bytes = 0;
++static u64 bytes_by_location[AI_LOC_REMOTE + 1];
+ 
+ static u64 dtype_size(ai_dtype dtype) {
+     switch (dtype) {
+@@ -17,9 +19,24 @@
+     }
+ }
+ 
++static bool multiply_u64_checked(u64 a, u64 b, u64 *out) {
++    if (!out) return false;
++    if (a == 0 || b == 0) {
++        *out = 0;
++        return true;
++    }
++    if (a > (~0ull) / b) return false;
++    *out = a * b;
++    return true;
++}
++
+ void ai_tensor_system_init(void) {
+     count = 0;
+     next_id = 1;
++    total_bytes = 0;
++    for (u32 i = 0; i <= (u32)AI_LOC_REMOTE; ++i) {
++        bytes_by_location[i] = 0;
++    }
+ }
+ 
+ ai_tensor *ai_tensor_create(
+@@ -33,9 +50,18 @@
+     if (count >= AI_MAX_TENSORS) {
+         panic("tensor registry full");
+     }
++    if (!name || !shape) {
++        panic("tensor name/shape must not be null");
++    }
+     if (ndim == 0 || ndim > AI_MAX_DIMS) {
+         panic("invalid tensor rank");
+     }
++    if (dtype_size(dtype) == 0) {
++        panic("invalid tensor dtype");
++    }
++    if ((u32)location > (u32)AI_LOC_REMOTE) {
++        panic("invalid tensor location");
++    }
+ 
+     ai_tensor *t = (ai_tensor *)kalloc(sizeof(ai_tensor), 16);
+     t->id = next_id++;
+@@ -51,11 +77,24 @@
+         t->shape[i] = 0;
+     }
+     for (u32 i = 0; i < ndim; ++i) {
++        if (shape[i] == 0) {
++            panic("tensor dimensions must be non-zero");
++        }
+         t->shape[i] = shape[i];
+-        elements *= shape[i];
++        if (!multiply_u64_checked(elements, shape[i], &elements)) {
++            panic("tensor element count overflow");
++        }
+     }
+ 
+-    t->bytes = elements * dtype_size(dtype);
++    if (!multiply_u64_checked(elements, dtype_size(dtype), &t->bytes)) {
++        panic("tensor byte size overflow");
++    }
++    if (total_bytes > (~0ull) - t->bytes) {
++        panic("tensor byte accounting overflow");
++    }
++
++    total_bytes += t->bytes;
++    bytes_by_location[(u32)location] += t->bytes;
+     registry[count++] = t;
+     return t;
+ }
+@@ -64,6 +103,28 @@
+     return count;
+ }
+ 
++u64 ai_tensor_total_bytes(void) {
++    return total_bytes;
++}
++
++u64 ai_tensor_bytes_at_location(ai_tensor_location location) {
++    if ((u32)location > (u32)AI_LOC_REMOTE) return 0;
++    return bytes_by_location[(u32)location];
++}
++
++bool ai_tensor_validate(const ai_tensor *tensor) {
++    if (!tensor || !tensor->name) return false;
++    if (tensor->id == 0) return false;
++    if (tensor->ndim == 0 || tensor->ndim > AI_MAX_DIMS) return false;
++    if (dtype_size(tensor->dtype) == 0) return false;
++    if ((u32)tensor->location > (u32)AI_LOC_REMOTE) return false;
++    if (tensor->bytes == 0) return false;
++    for (u32 i = 0; i < tensor->ndim; ++i) {
++        if (tensor->shape[i] == 0) return false;
++    }
++    return true;
++}
++
+ const char *ai_dtype_name(ai_dtype dtype) {
+     switch (dtype) {
+         case AI_DTYPE_F32: return "f32";
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/src/ai/work.c nexora_phase14/aikernel-starter/src/ai/work.c
+--- nexora_original/aikernel-starter/src/ai/work.c	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/src/ai/work.c	2026-09-20 14:46:25.455892897 +0000
+@@ -3,8 +3,12 @@
+ #include <kernel/panic.h>
+ 
+ void ai_work_graph_init(ai_work_graph *graph) {
++    if (!graph) return;
+     graph->node_count = 0;
+     graph->next_id = 1;
++    for (u32 i = 0; i < AI_MAX_WORK_NODES; ++i) {
++        graph->nodes[i] = NULL;
++    }
+ }
+ 
+ ai_work_node *ai_work_add(
+@@ -15,9 +19,15 @@
+     u64 deadline_ns,
+     u32 device_mask
+ ) {
++    if (!graph || !name) {
++        panic("invalid work node arguments");
++    }
+     if (graph->node_count >= AI_MAX_WORK_NODES) {
+         panic("work graph full");
+     }
++    if (device_mask == 0) {
++        panic("work node requires a device mask");
++    }
+ 
+     ai_work_node *node = (ai_work_node *)kalloc(sizeof(ai_work_node), 16);
+     node->id = graph->next_id++;
+@@ -31,11 +41,18 @@
+     node->input_count = 0;
+     node->output_count = 0;
+ 
++    for (u32 i = 0; i < AI_MAX_DEPS; ++i) node->dependencies[i] = 0;
++    for (u32 i = 0; i < AI_MAX_INPUTS; ++i) node->inputs[i] = NULL;
++    for (u32 i = 0; i < AI_MAX_OUTPUTS; ++i) node->outputs[i] = NULL;
++
+     graph->nodes[graph->node_count++] = node;
+     return node;
+ }
+ 
+ void ai_work_add_dependency(ai_work_node *node, u64 dependency_id) {
++    if (!node || dependency_id == 0) {
++        panic("invalid work dependency");
++    }
+     if (node->dependency_count >= AI_MAX_DEPS) {
+         panic("too many work dependencies");
+     }
+@@ -43,6 +60,9 @@
+ }
+ 
+ void ai_work_add_input(ai_work_node *node, ai_tensor *tensor) {
++    if (!node || !tensor) {
++        panic("invalid work input");
++    }
+     if (node->input_count >= AI_MAX_INPUTS) {
+         panic("too many work inputs");
+     }
+@@ -50,6 +70,9 @@
+ }
+ 
+ void ai_work_add_output(ai_work_node *node, ai_tensor *tensor) {
++    if (!node || !tensor) {
++        panic("invalid work output");
++    }
+     if (node->output_count >= AI_MAX_OUTPUTS) {
+         panic("too many work outputs");
+     }
+@@ -57,15 +80,27 @@
+ }
+ 
+ static const ai_work_node *find_node(const ai_work_graph *graph, u64 id) {
++    if (!graph || id == 0) return NULL;
+     for (u32 i = 0; i < graph->node_count; ++i) {
+-        if (graph->nodes[i]->id == id) {
++        if (graph->nodes[i] && graph->nodes[i]->id == id) {
+             return graph->nodes[i];
+         }
+     }
+     return NULL;
+ }
+ 
++static i32 find_node_index(const ai_work_graph *graph, u64 id) {
++    if (!graph || id == 0) return -1;
++    for (u32 i = 0; i < graph->node_count; ++i) {
++        if (graph->nodes[i] && graph->nodes[i]->id == id) {
++            return (i32)i;
++        }
++    }
++    return -1;
++}
++
+ bool ai_work_dependencies_done(const ai_work_graph *graph, const ai_work_node *node) {
++    if (!graph || !node) return false;
+     for (u32 i = 0; i < node->dependency_count; ++i) {
+         const ai_work_node *dep = find_node(graph, node->dependencies[i]);
+         if (!dep || dep->state != AI_WORK_DONE) {
+@@ -76,15 +111,127 @@
+ }
+ 
+ void ai_work_refresh_states(ai_work_graph *graph) {
++    if (!graph) return;
+     for (u32 i = 0; i < graph->node_count; ++i) {
+         ai_work_node *node = graph->nodes[i];
+-        if (node->state == AI_WORK_PENDING &&
++        if (node && node->state == AI_WORK_PENDING &&
+             ai_work_dependencies_done(graph, node)) {
+             node->state = AI_WORK_READY;
+         }
+     }
+ }
+ 
++u32 ai_work_graph_done_count(const ai_work_graph *graph) {
++    if (!graph) return 0;
++    u32 done = 0;
++    for (u32 i = 0; i < graph->node_count; ++i) {
++        if (graph->nodes[i] && graph->nodes[i]->state == AI_WORK_DONE) done++;
++    }
++    return done;
++}
++
++bool ai_work_graph_validate(const ai_work_graph *graph, ai_graph_validation *result) {
++    ai_graph_validation local;
++    ai_graph_validation *r = result ? result : &local;
++
++    r->valid = false;
++    r->node_count = 0;
++    r->edge_count = 0;
++    r->null_nodes = 0;
++    r->duplicate_ids = 0;
++    r->missing_dependencies = 0;
++    r->self_dependencies = 0;
++    r->duplicate_dependencies = 0;
++    r->null_tensors = 0;
++    r->invalid_device_masks = 0;
++    r->cycle_nodes = 0;
++
++    if (!graph || graph->node_count > AI_MAX_WORK_NODES) return false;
++    r->node_count = graph->node_count;
++
++    u32 indegree[AI_MAX_WORK_NODES];
++    bool removed[AI_MAX_WORK_NODES];
++    for (u32 i = 0; i < AI_MAX_WORK_NODES; ++i) {
++        indegree[i] = 0;
++        removed[i] = false;
++    }
++
++    for (u32 i = 0; i < graph->node_count; ++i) {
++        const ai_work_node *node = graph->nodes[i];
++        if (!node) {
++            r->null_nodes++;
++            continue;
++        }
++        if (node->device_mask == 0) r->invalid_device_masks++;
++
++        for (u32 j = i + 1; j < graph->node_count; ++j) {
++            const ai_work_node *other = graph->nodes[j];
++            if (other && other->id == node->id) r->duplicate_ids++;
++        }
++
++        for (u32 j = 0; j < node->input_count; ++j) {
++            if (!node->inputs[j] || !ai_tensor_validate(node->inputs[j])) r->null_tensors++;
++        }
++        for (u32 j = 0; j < node->output_count; ++j) {
++            if (!node->outputs[j] || !ai_tensor_validate(node->outputs[j])) r->null_tensors++;
++        }
++
++        for (u32 d = 0; d < node->dependency_count; ++d) {
++            u64 dep_id = node->dependencies[d];
++            r->edge_count++;
++            if (dep_id == node->id) r->self_dependencies++;
++            for (u32 previous = 0; previous < d; ++previous) {
++                if (node->dependencies[previous] == dep_id) {
++                    r->duplicate_dependencies++;
++                    break;
++                }
++            }
++            if (find_node_index(graph, dep_id) < 0) {
++                r->missing_dependencies++;
++            } else {
++                indegree[i]++;
++            }
++        }
++    }
++
++    if (r->null_nodes || r->duplicate_ids || r->missing_dependencies ||
++        r->self_dependencies || r->duplicate_dependencies || r->null_tensors ||
++        r->invalid_device_masks) {
++        return false;
++    }
++
++    u32 removed_count = 0;
++    bool progress = true;
++    while (removed_count < graph->node_count && progress) {
++        progress = false;
++        for (u32 i = 0; i < graph->node_count; ++i) {
++            if (removed[i] || indegree[i] != 0) continue;
++            removed[i] = true;
++            removed_count++;
++            progress = true;
++
++            u64 removed_id = graph->nodes[i]->id;
++            for (u32 j = 0; j < graph->node_count; ++j) {
++                if (removed[j] || indegree[j] == 0) continue;
++                const ai_work_node *candidate = graph->nodes[j];
++                for (u32 d = 0; d < candidate->dependency_count; ++d) {
++                    if (candidate->dependencies[d] == removed_id) {
++                        indegree[j]--;
++                    }
++                }
++            }
++        }
++    }
++
++    if (removed_count != graph->node_count) {
++        r->cycle_nodes = graph->node_count - removed_count;
++        return false;
++    }
++
++    r->valid = true;
++    return true;
++}
++
+ const char *ai_work_state_name(ai_work_state state) {
+     switch (state) {
+         case AI_WORK_PENDING: return "PENDING";
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/src/kernel/kmain.c nexora_phase14/aikernel-starter/src/kernel/kmain.c
+--- nexora_original/aikernel-starter/src/kernel/kmain.c	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/src/kernel/kmain.c	2026-09-20 14:48:09.255789556 +0000
+@@ -1,9 +1,11 @@
+ #include <kernel/printk.h>
+ #include <kernel/memory.h>
++#include <kernel/panic.h>
+ #include <ai/tensor.h>
+ #include <ai/work.h>
+ #include <ai/scheduler.h>
+ #include <ai/capability.h>
++#include <ai/integration.h>
+ 
+ static void print_tensor(const ai_tensor *t) {
+     kputs("tensor ");
+@@ -33,6 +35,43 @@
+     kputs("\n");
+ }
+ 
++static void print_phase14_report(const ai_phase14_report *report) {
++    kputs("\n[Nexora Phase 14 validation]\n");
++    kputs("status: ");
++    kputs(report->passed ? "PASS\n" : "FAIL\n");
++    kputs("assertions: ");
++    kprint_u64(report->assertions_passed);
++    kputs("/");
++    kprint_u64(report->assertions);
++    kputs("\n");
++    kputs("stress rounds: ");
++    kprint_u64(report->stress_rounds_completed);
++    kputs("/");
++    kprint_u64(AI_PHASE14_STRESS_ROUNDS);
++    kputs("\n");
++    kputs("graphs validated/completed: ");
++    kprint_u64(report->graphs_validated);
++    kputs("/");
++    kprint_u64(report->graphs_completed);
++    kputs("\n");
++    kputs("deadlocks detected: ");
++    kprint_u64(report->deadlocks_detected);
++    kputs("\n");
++    kputs("scheduler dispatches: ");
++    kprint_u64(report->scheduler_dispatches);
++    kputs("\n");
++    kputs("benchmark scenarios: ");
++    kprint_u64(report->benchmark.scenarios_completed);
++    kputs("/");
++    kprint_u64(report->benchmark.scenarios_run);
++    kputs(" scans=");
++    kprint_u64(report->benchmark.candidates_scanned);
++    kputs("\n");
++    kputs("heap growth: ");
++    kprint_u64(report->heap_growth);
++    kputs(" bytes\n");
++}
++
+ static void run_demo(void) {
+     kputs("\n[AIKernel demo]\n");
+ 
+@@ -108,27 +147,21 @@
+     ai_work_add_input(activation, hidden);
+     ai_work_add_output(activation, output);
+ 
++    ai_graph_validation validation;
++    if (!ai_work_graph_validate(&graph, &validation)) {
++        panic("demo graph validation failed");
++    }
++
+     ai_scheduler scheduler;
+     ai_scheduler_init(&scheduler, &graph);
+ 
+     print_work(matmul);
+     print_work(activation);
+ 
+-    ai_work_node *selected = ai_scheduler_pick(&scheduler);
+-    kputs("scheduler selected node ");
+-    kprint_u64(selected ? selected->id : 0);
+-    kputs("\n");
+-
+-    ai_scheduler_mark_running(&scheduler, selected);
+-    ai_scheduler_mark_done(&scheduler, selected);
+-
+-    selected = ai_scheduler_pick(&scheduler);
+-    kputs("scheduler selected node ");
+-    kprint_u64(selected ? selected->id : 0);
+-    kputs("\n");
+-
+-    ai_scheduler_mark_running(&scheduler, selected);
+-    ai_scheduler_mark_done(&scheduler, selected);
++    ai_scheduler_run_report run;
++    if (!ai_scheduler_run_to_completion(&scheduler, &run)) {
++        panic("demo scheduler failed to complete graph");
++    }
+ 
+     ai_capability agent_cap = ai_cap_create(
+         42,
+@@ -148,7 +181,7 @@
+ void kmain(void) {
+     console_init();
+ 
+-    kputs("AIKernel x86_64 booted.\n");
++    kputs("Nexora / AIKernel x86_64 booted.\n");
+ 
+     early_heap_init();
+     kputs("Early heap initialized.\n");
+@@ -156,9 +189,17 @@
+     ai_tensor_system_init();
+     kputs("AI runtime metadata initialized.\n");
+ 
++    ai_phase14_report phase14;
++    if (!ai_phase14_run(&phase14)) {
++        print_phase14_report(&phase14);
++        panic("Phase 14 validation failed");
++    }
++    print_phase14_report(&phase14);
++
++    ai_tensor_system_init();
+     run_demo();
+ 
+-    kputs("\nAIKernel initialization complete.\n");
++    kputs("\nNexora initialization complete.\n");
+     kputs("Halting CPU.\n");
+ 
+     for (;;) {
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/src/mm/bump.c nexora_phase14/aikernel-starter/src/mm/bump.c
+--- nexora_original/aikernel-starter/src/mm/bump.c	2026-09-18 05:29:28.000000000 +0000
++++ nexora_phase14/aikernel-starter/src/mm/bump.c	2026-09-20 14:45:44.928632114 +0000
+@@ -5,22 +5,57 @@
+ 
+ static u8 early_heap[EARLY_HEAP_SIZE] __attribute__((aligned(4096)));
+ static usize offset = 0;
++static usize allocation_count = 0;
++static usize requested_bytes = 0;
++static usize padding_bytes = 0;
++static usize high_watermark = 0;
++
++static bool valid_alignment(usize alignment) {
++    return alignment != 0 && (alignment & (alignment - 1)) == 0;
++}
++
++static usize aligned_offset(usize current, usize alignment) {
++    if (alignment == 0) alignment = 1;
++    return (current + alignment - 1) & ~(alignment - 1);
++}
+ 
+ void early_heap_init(void) {
+     offset = 0;
++    allocation_count = 0;
++    requested_bytes = 0;
++    padding_bytes = 0;
++    high_watermark = 0;
+ }
+ 
+-void *kalloc(usize size, usize alignment) {
++bool early_heap_can_alloc(usize size, usize alignment) {
+     if (alignment == 0) alignment = 1;
++    if (!valid_alignment(alignment)) return false;
+ 
+-    usize aligned = (offset + alignment - 1) & ~(alignment - 1);
++    usize aligned = aligned_offset(offset, alignment);
++    if (aligned < offset) return false;
++    if (size > EARLY_HEAP_SIZE - aligned) return false;
++    return true;
++}
+ 
+-    if (aligned + size > EARLY_HEAP_SIZE) {
++void *kalloc(usize size, usize alignment) {
++    if (alignment == 0) alignment = 1;
++    if (!valid_alignment(alignment)) {
++        panic("kalloc alignment must be a power of two");
++    }
++    if (!early_heap_can_alloc(size, alignment)) {
+         panic("early heap exhausted");
+     }
+ 
++    usize aligned = aligned_offset(offset, alignment);
++    usize padding = aligned - offset;
+     void *ptr = &early_heap[aligned];
++
+     offset = aligned + size;
++    allocation_count++;
++    requested_bytes += size;
++    padding_bytes += padding;
++    if (offset > high_watermark) high_watermark = offset;
++
+     return ptr;
+ }
+ 
+@@ -31,3 +66,13 @@
+ usize early_heap_capacity(void) {
+     return EARLY_HEAP_SIZE;
+ }
++
++void early_heap_get_stats(early_heap_stats *out) {
++    if (!out) return;
++    out->used = offset;
++    out->capacity = EARLY_HEAP_SIZE;
++    out->allocations = allocation_count;
++    out->requested_bytes = requested_bytes;
++    out->padding_bytes = padding_bytes;
++    out->high_watermark = high_watermark;
++}
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/tests/host_panic.c nexora_phase14/aikernel-starter/tests/host_panic.c
+--- nexora_original/aikernel-starter/tests/host_panic.c	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/tests/host_panic.c	2026-09-20 14:48:09.252729263 +0000
+@@ -0,0 +1,9 @@
++#include <kernel/panic.h>
++#include <stdio.h>
++#include <stdlib.h>
++
++__attribute__((noreturn))
++void panic(const char *message) {
++    fprintf(stderr, "PANIC: %s\n", message ? message : "(no message)");
++    abort();
++}
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/tests/phase14_report.c nexora_phase14/aikernel-starter/tests/phase14_report.c
+--- nexora_original/aikernel-starter/tests/phase14_report.c	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/tests/phase14_report.c	2026-09-20 14:49:47.787177713 +0000
+@@ -0,0 +1,51 @@
++#include <stdio.h>
++#include <ai/integration.h>
++#include <ai/tensor.h>
++#include <kernel/memory.h>
++
++int main(void) {
++    early_heap_init();
++    ai_tensor_system_init();
++
++    ai_phase14_report r;
++    bool ok = ai_phase14_run(&r);
++
++    printf("{\n");
++    printf("  \"phase\": 14,\n");
++    printf("  \"status\": \"%s\",\n", ok ? "PASS" : "FAIL");
++    printf("  \"assertions\": {\"passed\": %u, \"failed\": %u, \"total\": %u},\n",
++           r.assertions_passed, r.assertions_failed, r.assertions);
++    printf("  \"stress\": {\"rounds_completed\": %u, \"rounds_requested\": %u},\n",
++           r.stress_rounds_completed, AI_PHASE14_STRESS_ROUNDS);
++    printf("  \"graphs\": {\"validated\": %u, \"completed\": %u, \"deadlocks_detected\": %u},\n",
++           r.graphs_validated, r.graphs_completed, r.deadlocks_detected);
++    printf("  \"scheduler_dispatches\": %llu,\n",
++           (unsigned long long)r.scheduler_dispatches);
++    printf("  \"tensor_bytes_accounted\": %llu,\n",
++           (unsigned long long)r.tensor_bytes_accounted);
++    printf("  \"heap\": {\"before\": %llu, \"after\": %llu, \"growth\": %llu},\n",
++           (unsigned long long)r.heap_before,
++           (unsigned long long)r.heap_after,
++           (unsigned long long)r.heap_growth);
++    printf("  \"checks\": {\n");
++    printf("    \"capability_isolation\": %s,\n", r.capability_isolation_ok ? "true" : "false");
++    printf("    \"deadlock_detection\": %s,\n", r.deadlock_detection_ok ? "true" : "false");
++    printf("    \"tensor_accounting\": %s,\n", r.tensor_accounting_ok ? "true" : "false");
++    printf("    \"memory_accounting\": %s\n", r.memory_accounting_ok ? "true" : "false");
++    printf("  },\n");
++    printf("  \"benchmark\": {\n");
++    printf("    \"status\": \"%s\",\n", r.benchmark.passed ? "PASS" : "FAIL");
++    printf("    \"scenarios_run\": %u,\n", r.benchmark.scenarios_run);
++    printf("    \"scenarios_completed\": %u,\n", r.benchmark.scenarios_completed);
++    printf("    \"nodes_total\": %u,\n", r.benchmark.nodes_total);
++    printf("    \"edges_total\": %u,\n", r.benchmark.edges_total);
++    printf("    \"dispatches\": %llu,\n", (unsigned long long)r.benchmark.dispatches);
++    printf("    \"picks\": %llu,\n", (unsigned long long)r.benchmark.picks);
++    printf("    \"candidates_scanned\": %llu,\n", (unsigned long long)r.benchmark.candidates_scanned);
++    printf("    \"selection_efficiency_ppm\": %llu\n",
++           (unsigned long long)r.benchmark.selection_efficiency_ppm);
++    printf("  }\n");
++    printf("}\n");
++
++    return ok ? 0 : 1;
++}
+diff -ruN '--exclude=build' '--exclude=build-host' '--exclude=artifacts' nexora_original/aikernel-starter/tests/test_phase14.c nexora_phase14/aikernel-starter/tests/test_phase14.c
+--- nexora_original/aikernel-starter/tests/test_phase14.c	1970-01-01 00:00:00.000000000 +0000
++++ nexora_phase14/aikernel-starter/tests/test_phase14.c	2026-09-20 14:48:09.253810526 +0000
+@@ -0,0 +1,198 @@
++#include <stdio.h>
++#include <ai/benchmark.h>
++#include <ai/capability.h>
++#include <ai/integration.h>
++#include <ai/scheduler.h>
++#include <ai/tensor.h>
++#include <ai/work.h>
++#include <kernel/memory.h>
++
++static unsigned tests_run = 0;
++static unsigned tests_failed = 0;
++
++#define CHECK(condition) do { \
++    tests_run++; \
++    if (!(condition)) { \
++        tests_failed++; \
++        printf("not ok %u - %s:%d: %s\n", tests_run, __FILE__, __LINE__, #condition); \
++    } else { \
++        printf("ok %u - %s\n", tests_run, #condition); \
++    } \
++} while (0)
++
++static void reset_runtime(void) {
++    early_heap_init();
++    ai_tensor_system_init();
++}
++
++static void test_tensor_accounting(void) {
++    reset_runtime();
++    u64 shape[2] = {4, 8};
++    ai_tensor *a = ai_tensor_create(
++        "a", AI_DTYPE_F16, 2, shape, AI_LOC_CPU_RAM, AI_TENSOR_EPHEMERAL
++    );
++    ai_tensor *b = ai_tensor_create(
++        "b", AI_DTYPE_F32, 2, shape, AI_LOC_GPU_HBM, AI_TENSOR_PERSISTENT
++    );
++
++    CHECK(ai_tensor_validate(a));
++    CHECK(ai_tensor_validate(b));
++    CHECK(a->bytes == 64);
++    CHECK(b->bytes == 128);
++    CHECK(ai_tensor_total_bytes() == 192);
++    CHECK(ai_tensor_bytes_at_location(AI_LOC_CPU_RAM) == 64);
++    CHECK(ai_tensor_bytes_at_location(AI_LOC_GPU_HBM) == 128);
++}
++
++static void test_graph_validation(void) {
++    reset_runtime();
++    ai_work_graph graph;
++    ai_work_graph_init(&graph);
++    ai_work_node *a = ai_work_add(&graph, "a", AI_OP_NOOP, 1, 100, AI_DEVICE_CPU);
++    ai_work_node *b = ai_work_add(&graph, "b", AI_OP_NOOP, 1, 200, AI_DEVICE_CPU);
++    ai_work_add_dependency(b, a->id);
++
++    ai_graph_validation validation;
++    CHECK(ai_work_graph_validate(&graph, &validation));
++    CHECK(validation.valid);
++    CHECK(validation.node_count == 2);
++    CHECK(validation.edge_count == 1);
++
++    ai_work_graph missing;
++    ai_work_graph_init(&missing);
++    ai_work_node *m = ai_work_add(&missing, "missing", AI_OP_NOOP, 1, 1, AI_DEVICE_CPU);
++    ai_work_add_dependency(m, 999);
++    CHECK(!ai_work_graph_validate(&missing, &validation));
++    CHECK(validation.missing_dependencies == 1);
++
++    ai_work_graph cycle;
++    ai_work_graph_init(&cycle);
++    ai_work_node *c1 = ai_work_add(&cycle, "c1", AI_OP_NOOP, 1, 1, AI_DEVICE_CPU);
++    ai_work_node *c2 = ai_work_add(&cycle, "c2", AI_OP_NOOP, 1, 1, AI_DEVICE_CPU);
++    ai_work_add_dependency(c1, c2->id);
++    ai_work_add_dependency(c2, c1->id);
++    CHECK(!ai_work_graph_validate(&cycle, &validation));
++    CHECK(validation.cycle_nodes == 2);
++}
++
++static void test_scheduler(void) {
++    reset_runtime();
++    ai_work_graph graph;
++    ai_work_graph_init(&graph);
++    ai_work_node *late = ai_work_add(&graph, "late", AI_OP_NOOP, 50, 5000, AI_DEVICE_CPU);
++    ai_work_node *early = ai_work_add(&graph, "early", AI_OP_NOOP, 50, 1000, AI_DEVICE_CPU);
++    ai_work_node *high = ai_work_add(&graph, "high", AI_OP_NOOP, 80, 9000, AI_DEVICE_CPU);
++
++    ai_scheduler scheduler;
++    ai_scheduler_init(&scheduler, &graph);
++    CHECK(ai_scheduler_pick(&scheduler) == high);
++    ai_scheduler_mark_running(&scheduler, high);
++    ai_scheduler_mark_done(&scheduler, high);
++    CHECK(ai_scheduler_pick(&scheduler) == early);
++    ai_scheduler_mark_running(&scheduler, early);
++    ai_scheduler_mark_done(&scheduler, early);
++    CHECK(ai_scheduler_pick(&scheduler) == late);
++
++    ai_scheduler_mark_running(&scheduler, late);
++    ai_scheduler_mark_done(&scheduler, late);
++    ai_scheduler_run_report report;
++    CHECK(ai_scheduler_run_to_completion(&scheduler, &report));
++    CHECK(report.completed_nodes == 3);
++    CHECK(scheduler.dispatch_count == 3);
++    CHECK(scheduler.candidate_scan_count >= 9);
++}
++
++static void test_deadlock_detection(void) {
++    reset_runtime();
++    ai_work_graph graph;
++    ai_work_graph_init(&graph);
++    ai_work_node *a = ai_work_add(&graph, "a", AI_OP_NOOP, 1, 1, AI_DEVICE_CPU);
++    ai_work_node *b = ai_work_add(&graph, "b", AI_OP_NOOP, 1, 1, AI_DEVICE_CPU);
++    ai_work_add_dependency(a, b->id);
++    ai_work_add_dependency(b, a->id);
++
++    ai_scheduler scheduler;
++    ai_scheduler_run_report report;
++    ai_scheduler_init(&scheduler, &graph);
++    CHECK(!ai_scheduler_run_to_completion(&scheduler, &report));
++    CHECK(report.deadlocked);
++    CHECK(scheduler.deadlock_count == 1);
++}
++
++static void test_capabilities(void) {
++    ai_capability cap = ai_cap_create(
++        7, AI_CAP_TENSOR_READ | AI_CAP_MODEL_USE | AI_CAP_GPU_USE
++    );
++    CHECK(ai_cap_has(&cap, AI_CAP_TENSOR_READ));
++    CHECK(ai_cap_has(&cap, AI_CAP_MODEL_USE));
++    CHECK(ai_cap_has(&cap, AI_CAP_GPU_USE));
++    CHECK(!ai_cap_has(&cap, AI_CAP_TENSOR_WRITE));
++    CHECK(!ai_cap_has(&cap, AI_CAP_NETWORK));
++    CHECK(!ai_cap_has(&cap, AI_CAP_ADMIN));
++}
++
++static void test_memory_metrics(void) {
++    reset_runtime();
++    CHECK(early_heap_can_alloc(32, 16));
++    (void)kalloc(7, 1);
++    (void)kalloc(16, 16);
++
++    early_heap_stats stats;
++    early_heap_get_stats(&stats);
++    CHECK(stats.allocations == 2);
++    CHECK(stats.requested_bytes == 23);
++    CHECK(stats.padding_bytes == 9);
++    CHECK(stats.used == 32);
++    CHECK(stats.high_watermark == 32);
++    CHECK(!early_heap_can_alloc(8, 3));
++}
++
++static void test_benchmark(void) {
++    reset_runtime();
++    ai_benchmark_report report;
++    CHECK(ai_benchmark_run(&report));
++    CHECK(report.scenarios_run == 4);
++    CHECK(report.scenarios_completed == 4);
++    CHECK(report.nodes_total == 60);
++    CHECK(report.edges_total == 56);
++    CHECK(report.dispatches == 60);
++    CHECK(report.candidates_scanned > report.dispatches);
++    CHECK(report.selection_efficiency_ppm > 0);
++}
++
++static void test_phase14_suite(void) {
++    reset_runtime();
++    ai_phase14_report report;
++    CHECK(ai_phase14_run(&report));
++    CHECK(report.passed);
++    CHECK(report.assertions_failed == 0);
++    CHECK(report.stress_rounds_completed == AI_PHASE14_STRESS_ROUNDS);
++    CHECK(report.deadlocks_detected == 1);
++    CHECK(report.graphs_validated == AI_PHASE14_STRESS_ROUNDS + 1);
++    CHECK(report.graphs_completed == AI_PHASE14_STRESS_ROUNDS + 1);
++    CHECK(report.capability_isolation_ok);
++    CHECK(report.deadlock_detection_ok);
++    CHECK(report.tensor_accounting_ok);
++    CHECK(report.memory_accounting_ok);
++    CHECK(report.benchmark.passed);
++    CHECK(report.heap_growth > 0);
++    CHECK(report.heap_after < early_heap_capacity());
++}
++
++int main(void) {
++    printf("TAP version 13\n");
++    test_tensor_accounting();
++    test_graph_validation();
++    test_scheduler();
++    test_deadlock_detection();
++    test_capabilities();
++    test_memory_metrics();
++    test_benchmark();
++    test_phase14_suite();
++    printf("1..%u\n", tests_run);
++    printf("Phase 14 host verification: %s (%u/%u passed)\n",
++           tests_failed == 0 ? "PASS" : "FAIL",
++           tests_run - tests_failed,
++           tests_run);
++    return tests_failed == 0 ? 0 : 1;
++}

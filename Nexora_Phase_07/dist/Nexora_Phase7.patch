@@ -1,0 +1,1862 @@
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/CHANGELOG.md /mnt/data/Nexora_Phase7/CHANGELOG.md
+--- /mnt/data/nexora_work/aikernel-starter/CHANGELOG.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/CHANGELOG.md	2026-09-20 05:03:07.383103320 +0000
+@@ -0,0 +1,28 @@
++# Changelog
++
++## Phase 7 — Real Device Path
++
++Added:
++
++- x86-64 port-I/O helpers;
++- PCI configuration-space enumeration;
++- PCI accelerator/display candidate detection;
++- experimental DMA buffer abstraction;
++- generic accelerator registry and backend ABI;
++- virtio-style simulated accelerator queue;
++- DMA copy command with byte-for-byte verification;
++- scheduler-to-accelerator work dispatch demonstration;
++- accelerator telemetry;
++- `make phase7-check` build/symbol gate;
++- corrected the starter Multiboot2 section allocation/link layout so the header remains in the bootloader search window;
++- independent Multiboot2 header/checksum validation in the cross-check script;
++- Phase 7 architecture, validation, and integration documentation.
++
++Deliberately not added:
++
++- vendor GPU driver;
++- CUDA/HIP/OpenCL kernel ABI;
++- BAR programming;
++- MSI/MSI-X;
++- IOMMU;
++- claim of real neural-network computation on physical accelerator hardware.
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/Makefile /mnt/data/Nexora_Phase7/Makefile
+--- /mnt/data/nexora_work/aikernel-starter/Makefile	2026-09-18 05:29:28.000000000 +0000
++++ /mnt/data/Nexora_Phase7/Makefile	2026-09-20 05:02:25.660034982 +0000
+@@ -9,7 +9,7 @@
+ 
+ CFLAGS  := -std=c11 -O2 -Wall -Wextra -Werror \
+            -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
+-           -m64 -mno-red-zone \
++           -m64 -mno-red-zone -fno-asynchronous-unwind-tables -fno-unwind-tables \
+            -Iinclude
+ 
+ ASFLAGS := -m64 -ffreestanding -fno-pic -fno-pie
+@@ -21,17 +21,22 @@
+ 	src/kernel/printk.c \
+ 	src/kernel/panic.c \
+ 	src/mm/bump.c \
++	src/mm/dma.c \
++	src/drivers/pci.c \
++	src/drivers/pci_accel.c \
++	src/drivers/nex_accel_sim.c \
+ 	src/ai/tensor.c \
+ 	src/ai/work.c \
+ 	src/ai/capability.c \
+-	src/ai/scheduler.c
++	src/ai/scheduler.c \
++	src/ai/accelerator.c
+ 
+ ASM_SOURCES := src/arch/x86_64/boot.S
+ 
+ OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(C_SOURCES)) \
+            $(patsubst %.S,$(BUILD)/%.o,$(ASM_SOURCES))
+ 
+-.PHONY: all clean run debug check
++.PHONY: all clean run debug check phase7-check
+ 
+ all: $(ISO)
+ 
+@@ -87,3 +92,12 @@
+ 
+ clean:
+ 	rm -rf $(BUILD)
++
++phase7-check: $(KERNEL)
++	@echo "Checking Phase 7 symbols..."
++	@nm $(KERNEL) | grep -q " pci_enumerate$$"
++	@nm $(KERNEL) | grep -q " dma_alloc$$"
++	@nm $(KERNEL) | grep -q " ai_accel_register$$"
++	@nm $(KERNEL) | grep -q " nex_accel_sim_init$$"
++	@nm $(KERNEL) | grep -q " pci_accel_discover$$"
++	@echo "Phase 7 compile/symbol checks passed."
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/README.md /mnt/data/Nexora_Phase7/README.md
+--- /mnt/data/nexora_work/aikernel-starter/README.md	2026-09-18 05:29:28.000000000 +0000
++++ /mnt/data/Nexora_Phase7/README.md	2026-09-20 05:01:42.865965420 +0000
+@@ -1,6 +1,6 @@
+-# AIKernel Starter
++# Nexora AIKernel — Phase 7
+ 
+-A small **x86-64 experimental research kernel** intended as a foundation for exploring AI-native operating-system abstractions.
++An **x86-64 experimental AI-native research kernel**. This package contains the original starter plus the Phase 7 real-device-path milestone.
+ 
+ This is deliberately **not a Linux clone**. The initial design treats these as first-class concepts:
+ 
+@@ -13,6 +13,23 @@
+ 
+ The current version is a bootable research skeleton. It does **not** yet run real GPU/NPU kernels.
+ 
++
++## Phase 7 additions
++
++This package adds the first hardware-facing accelerator path without binding Nexora to a vendor GPU stack:
++
++- PCI configuration-space enumeration
++- experimental DMA buffers
++- generic accelerator registry/backend ABI
++- virtio-style simulated accelerator queue
++- PCI accelerator/display candidate discovery
++- scheduler-to-device dispatch demo
++- deterministic DMA copy verification
++- accelerator telemetry
++- `make phase7-check` validation target
++
++The simulator validates transport/control semantics only. `AI_ACCEL_STATUS_SIMULATED` is used for AI work so simulated dispatch cannot be mistaken for real neural-network execution. See `docs/PHASE7_REAL_DEVICE_PATH.md`.
++
+ ## What already works
+ 
+ - Multiboot2 boot through GRUB
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/docs/PHASE7_CROSSCHECK.md /mnt/data/Nexora_Phase7/docs/PHASE7_CROSSCHECK.md
+--- /mnt/data/nexora_work/aikernel-starter/docs/PHASE7_CROSSCHECK.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/docs/PHASE7_CROSSCHECK.md	2026-09-20 05:03:23.339318193 +0000
+@@ -0,0 +1,22 @@
++# Phase 7 Cross-check Result
++
++Result: **PASS**
++
++The Phase 7 package was cross-checked across source, headers, build rules, documentation, linked ELF, and milestone scope.
++
++Consistent conclusions across all layers:
++
++- Phase 7 implements the real-device *control/data path substrate*, not a vendor GPU driver.
++- PCI-discovered physical accelerator candidates remain offline until a device-specific driver exists.
++- AI work on the simulator returns `SIMULATED`, so transport validation is not mislabeled as real numerical inference.
++- DMA is experimental and depends on the current identity-mapped low-memory model; IOMMU isolation is not claimed.
++- The kernel compiles with warnings as errors, has no unresolved symbols, is x86-64, and has a valid Multiboot2 header in the first 32 KiB.
++- Runtime QEMU boot was not executed in the packaging environment because GRUB/QEMU/xorriso tools are absent.
++
++Automated command:
++
++`./scripts/phase7_crosscheck.sh`
++
++Automated result:
++
++`Phase 7 cross-check: PASS`
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/docs/PHASE7_INTEGRATION_NOTES.md /mnt/data/Nexora_Phase7/docs/PHASE7_INTEGRATION_NOTES.md
+--- /mnt/data/nexora_work/aikernel-starter/docs/PHASE7_INTEGRATION_NOTES.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/docs/PHASE7_INTEGRATION_NOTES.md	2026-09-20 05:01:09.797520619 +0000
+@@ -0,0 +1,111 @@
++# Phase 7 Integration Notes
++
++This package was built from the available `aikernel-starter` baseline. If the active Nexora tree already contains completed Phases 1–6, merge Phase 7 at the interfaces below rather than replacing newer subsystems.
++
++## 1. Memory-manager integration
++
++Replace the experimental identity-map assumption in `src/mm/dma.c` with the existing physical/virtual memory manager.
++
++Desired final interface:
++
++```text
++DMA allocation request
++    ↓
++physical page allocator
++    ↓
++contiguous/scatter-gather selection
++    ↓
++IOMMU mapping (when available)
++    ↓
++device IOVA + CPU mapping
++```
++
++Do not preserve `(u64)virt` as the long-term DMA address rule.
++
++## 2. User-mode/syscall integration
++
++If Phase 5/6 already exposes user mode and AI syscalls, keep device programming in the kernel and expose only narrow operations such as:
++
++```text
++ai_device_query
++ai_work_submit
++ai_work_wait
++```
++
++Do not expose raw PCI config writes or arbitrary BAR mappings to untrusted AI workloads.
++
++## 3. Capability integration
++
++Before a non-simulator backend accepts work, gate dispatch on the existing capability model:
++
++```text
++subject may execute
++AND
++subject may use target accelerator
++AND
++memory handles grant required access
++AND
++quota/deadline policy allows admission
++```
++
++Phase 7's demo does not yet thread a capability token through every submission because its purpose is device-path validation.
++
++## 4. Shared-tensor integration
++
++If Phase 4 already implements shared tensor handles, the accelerator command should reference validated tensor/backing handles rather than raw physical addresses supplied by user space.
++
++Preferred flow:
++
++```text
++user tensor handle
++    ↓
++kernel resolves backing object
++    ↓
++capability check
++    ↓
++DMA/IOMMU mapping
++    ↓
++accelerator descriptor
++```
++
++## 5. Scheduler integration
++
++The current demonstration selects the first online backend compatible with a work node's device mask.
++
++If Phase 3 contains the full cost model, device selection should use its placement score:
++
++```text
++transfer cost
+++ queue delay
+++ execution estimate
+++ memory pressure penalty
+++ deadline penalty
++```
++
++The Phase 7 registry is intended to supply the concrete device candidates for that algorithm.
++
++## 6. PCI evolution
++
++The next hardware step should add, in order:
++
++1. ACPI table access;
++2. MCFG/ECAM support;
++3. BAR sizing and mapping;
++4. MSI/MSI-X;
++5. DMA masks and IOMMU mapping;
++6. one intentionally simple experimental accelerator protocol.
++
++A modern NVIDIA/AMD/Intel GPU driver should still not be the immediate next task.
++
++## 7. Real-device backend contract
++
++A real backend should remain behind the existing four-method ABI:
++
++```c
++submit()
++kick()
++poll()
++reset()
++```
++
++Device-specific details should stay private to the driver. This is what allows the AI scheduler, tensor manager, and capability system to remain hardware-independent.
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/docs/PHASE7_REAL_DEVICE_PATH.md /mnt/data/Nexora_Phase7/docs/PHASE7_REAL_DEVICE_PATH.md
+--- /mnt/data/nexora_work/aikernel-starter/docs/PHASE7_REAL_DEVICE_PATH.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/docs/PHASE7_REAL_DEVICE_PATH.md	2026-09-20 05:01:09.785520458 +0000
+@@ -0,0 +1,314 @@
++# Nexora Phase 7 — Real Device Path
++
++## Status
++
++**Implemented as an experimental device-path milestone.**
++
++This phase follows the original roadmap progression:
++
++1. virtio-style simulated accelerator;
++2. PCI enumeration;
++3. simple DMA-capable experimental path;
++4. narrow accelerator backend interface;
++5. defer modern production GPU drivers until the abstraction is validated.
++
++The word *real* in this milestone means that Nexora now crosses the kernel/device boundary through explicit device discovery, DMA-addressable buffers, queue submission, completion, and backend registration. It does **not** mean that CUDA, ROCm, oneAPI, or a vendor GPU kernel driver exists in Nexora.
++
++---
++
++## Phase 7 objective
++
++Create the minimum hardware-facing substrate needed to test whether the AI-native scheduler and object model can drive heterogeneous accelerators without coupling the kernel to a specific vendor stack.
++
++The central rule is:
++
++> The scheduler sees an accelerator contract, not a GPU vendor API.
++
++---
++
++## Step 1 — Architecture I/O primitives
++
++Added `include/arch/x86_64/io.h` with freestanding x86-64 port-I/O helpers and an explicit memory fence.
++
++Implemented primitives:
++
++- 8/16/32-bit port reads;
++- 8/16/32-bit port writes;
++- device/CPU ordering fence.
++
++These primitives are deliberately small and architecture-local.
++
++---
++
++## Step 2 — PCI configuration-space enumeration
++
++Added:
++
++- `include/kernel/pci.h`
++- `src/drivers/pci.c`
++
++The implementation uses x86 PCI Configuration Mechanism #1 (`0xCF8/0xCFC`) and records:
++
++- BDF: bus/device/function;
++- vendor/device IDs;
++- class/subclass/programming interface;
++- revision;
++- header type;
++- six BAR values;
++- IRQ line/pin.
++
++Phase 7 identifies two accelerator-relevant PCI classes:
++
++- class `0x12`: Processing Accelerator;
++- class `0x03`: Display Controller.
++
++### Important limitation
++
++This phase does not yet parse ACPI MCFG or PCIe ECAM segments. It is therefore an experimental x86 path, not a complete PCIe implementation.
++
++---
++
++## Step 3 — Experimental DMA buffers
++
++Added:
++
++- `include/kernel/dma.h`
++- `src/mm/dma.c`
++
++The DMA API provides:
++
++```c
++dma_alloc()
++dma_zero()
++dma_sync_for_device()
++dma_sync_for_cpu()
++```
++
++`dma_buffer` carries both CPU virtual and device-visible physical addresses.
++
++### Current translation model
++
++The starter kernel identity-maps low memory, so Phase 7 currently uses:
++
++```text
++physical address == kernel virtual address
++```
++
++for buffers allocated from the early heap.
++
++This is valid only for the current experimental memory model. A later integration with the Phase 1/2 physical/virtual memory managers should replace this with a canonical `virt_to_phys()`/DMA mapping service.
++
++### Security limitation
++
++No IOMMU isolation exists yet. A production accelerator path must not treat this allocator as safe for mutually untrusted devices or processes.
++
++---
++
++## Step 4 — Narrow accelerator backend ABI
++
++Added:
++
++- `include/ai/accelerator.h`
++- `src/ai/accelerator.c`
++
++A backend exposes only four operations:
++
++```c
++submit()
++kick()
++poll()
++reset()
++```
++
++The generic device descriptor carries:
++
++- transport type;
++- AI device mask;
++- PCI identity when applicable;
++- DMA address width;
++- queue depth;
++- online/offline state;
++- counters for submission, completion, failures, and bytes moved.
++
++This contract is intentionally much narrower than CUDA/HIP/OpenCL/Vulkan. Those APIs may eventually exist in user space or a compatibility/runtime layer, but they are not the Nexora kernel ABI.
++
++---
++
++## Step 5 — Virtio-style in-kernel accelerator simulator
++
++Added:
++
++- `include/drivers/nex_accel_sim.h`
++- `src/drivers/nex_accel_sim.c`
++
++The simulator provides a fixed-depth descriptor queue with:
++
++- producer index;
++- consumer index;
++- pending-count accounting;
++- explicit `kick` and `poll` semantics;
++- completion states.
++
++It supports three command types:
++
++```text
++NOP
++COPY
++WORK
++```
++
++`COPY` performs a real CPU-visible buffer copy through the DMA-address abstraction. `WORK` deliberately returns `SIMULATED`, not `OK`, because Phase 7 validates transport and scheduling semantics rather than pretending to execute a neural network kernel.
++
++---
++
++## Step 6 — PCI accelerator candidate registration
++
++Added:
++
++- `include/drivers/pci_accel.h`
++- `src/drivers/pci_accel.c`
++
++Discovered PCI processing accelerators and display controllers are registered in the accelerator registry as **offline/inert candidates**.
++
++This is a deliberate safety mechanism. Device discovery alone is not sufficient evidence that Nexora knows how to program that device.
++
++The kernel records its identity but does not touch BARs, DMA engines, firmware queues, or vendor command processors.
++
++---
++
++## Step 7 — Scheduler-to-device dispatch demonstration
++
++The kernel boot demo now performs:
++
++```text
++AI work graph
++    ↓
++Nexora scheduler
++    ↓
++find compatible accelerator backend
++    ↓
++translate work node to accelerator command
++    ↓
++submit/kick/poll/wait
++    ↓
++completion state
++    ↓
++mark work node done/failed
++```
++
++On the simulated backend, AI work returns `SIMULATED` and is considered a successful path-validation completion.
++
++This validates the control plane while preserving a strict distinction between scheduling and actual numerical execution.
++
++---
++
++## Step 8 — DMA data-path self-test
++
++At boot, Phase 7 allocates two 256-byte DMA buffers, fills the source with a deterministic pattern, submits a `COPY` command, waits for completion, synchronizes for CPU access, and verifies every byte.
++
++Expected result:
++
++```text
++DMA command status: OK
++DMA copy verification: PASS
++```
++
++This tests more than a function call: it exercises allocation, device-address construction, submission, queue processing, completion, synchronization, and verification.
++
++---
++
++## Step 9 — Kernel-visible telemetry
++
++Each accelerator records:
++
++```text
++submitted
++completed
++failed
++bytes_moved
++```
++
++The boot path prints an accelerator summary. These counters are intentionally primitive; later phases can expose them through the syscall ABI, tracing, or a metrics ring.
++
++---
++
++## Step 10 — Build and validation gate
++
++The Makefile now provides:
++
++```bash
++make phase7-check
++```
++
++The target:
++
++1. compiles every Phase 7 source with the kernel's strict warnings-as-errors configuration;
++2. links `build/kernel.elf`;
++3. checks that required Phase 7 symbols are present.
++
++Required symbols include:
++
++```text
++pci_enumerate
++dma_alloc
++ai_accel_register
++nex_accel_sim_init
++pci_accel_discover
++```
++
++---
++
++# New execution architecture
++
++```text
++                     +-----------------------+
++                     | AI work graph         |
++                     +-----------+-----------+
++                                 |
++                                 v
++                     +-----------------------+
++                     | Nexora scheduler      |
++                     +-----------+-----------+
++                                 |
++                                 v
++                     +-----------------------+
++                     | Accelerator registry  |
++                     +----+-------------+----+
++                          |             |
++              online      |             | discovered/offline
++                          v             v
++             +----------------+   +-----------------------+
++             | sim backend    |   | PCI candidate backend |
++             | queue + DMA    |   | identity only         |
++             +-------+--------+   +-----------+-----------+
++                     |                        |
++                     v                        v
++             +----------------+       +---------------+
++             | DMA buffers    |       | PCI config    |
++             | identity map   |       | enumeration   |
++             +----------------+       +---------------+
++```
++
++---
++
++# Acceptance criteria
++
++Phase 7 is accepted when all of the following are true:
++
++- [x] Kernel has architecture-local port I/O primitives.
++- [x] PCI devices can be enumerated through configuration mechanism #1.
++- [x] Accelerator-relevant PCI classes can be identified.
++- [x] DMA-addressable buffers can be allocated under the current identity-map model.
++- [x] Generic accelerator backend ABI exists.
++- [x] Simulated accelerator uses queue submission/completion semantics.
++- [x] DMA copy path has deterministic verification logic.
++- [x] Scheduler work can traverse the generic accelerator interface.
++- [x] Physical PCI candidates are not treated as online without a driver.
++- [x] Accelerator telemetry is recorded.
++- [x] Kernel compiles and links with warnings treated as errors.
++- [x] Phase 7 required symbols are checked automatically.
++- [ ] Runtime QEMU boot test performed in an environment with QEMU + GRUB tooling.
++- [ ] Real BAR mapping and device-specific command queue implemented.
++- [ ] IOMMU-backed DMA isolation implemented.
++
++The last three items are intentionally outside the verified portion of this package.
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/docs/PHASE7_VALIDATION.md /mnt/data/Nexora_Phase7/docs/PHASE7_VALIDATION.md
+--- /mnt/data/nexora_work/aikernel-starter/docs/PHASE7_VALIDATION.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/docs/PHASE7_VALIDATION.md	2026-09-20 05:02:59.220597120 +0000
+@@ -0,0 +1,107 @@
++# Phase 7 Validation Record
++
++## Build environment used for this package
++
++Available:
++
++- `gcc`
++- `ld`
++- `nm`
++
++Not available in the execution environment used to prepare this package:
++
++- `grub-file`
++- `grub-mkrescue`
++- `qemu-system-x86_64`
++- `xorriso`
++
++Therefore the kernel compilation/link and static symbol gate were executed, while ISO creation and runtime QEMU boot were not claimed as tested.
++
++## Executed command
++
++```bash
++make clean
++make phase7-check
++```
++
++## Result
++
++**PASS**
++
++The build completed with:
++
++```text
++-std=c11
++-O2
++-Wall
++-Wextra
++-Werror
++-ffreestanding
++-fno-stack-protector
++-fno-pic
++-fno-pie
++-m64
++-mno-red-zone
++```
++
++`build/kernel.elf` linked successfully and all required Phase 7 symbols were found. The independent cross-check also verified that the Multiboot2 header is aligned, checksum-valid, terminated correctly, and located within the first 32 KiB of the ELF image. The linked entry point remains inside the starter kernel's initial 1 GiB identity map.
++
++## Required runtime output after QEMU boot
++
++When QEMU/GRUB tooling is available, the expected Phase 7 indicators are:
++
++```text
++Nexora AI-native kernel booted.
++Simulated accelerator registered.
++
++[Phase 7 device discovery]
++PCI devices discovered: ...
++
++[Phase 7 DMA + simulated accelerator]
++DMA command status: OK
++DMA copy verification: PASS
++
++[Nexora AI work graph]
++device path result: SIMULATED
++...
++
++Nexora Phase 7 initialization complete.
++```
++
++The exact PCI list depends on QEMU machine configuration.
++
++## Baseline boot-layout correction
++
++During validation, the original starter assembly section did not mark `.multiboot_header` as allocatable. That allowed the linker to place the executable text at address zero while the Multiboot2 section sat separately at 1 MiB/file offset beyond the normal bootloader search window. Phase 7 corrects the assembly section flags and discards compiler unwind metadata, restoring a coherent load layout beginning at 1 MiB.
++
++This is a baseline correctness fix discovered by the Phase 7 cross-check, not a new accelerator feature.
++
++## Negative-safety checks
++
++The implementation was also checked for these architectural errors:
++
++- no vendor-specific GPU register programming;
++- no claim that PCI discovery equals a functional device driver;
++- no direct user-supplied raw physical address ABI;
++- no silent claim that simulated work performed real matrix/attention computation;
++- no cloud/runtime dependency;
++- no libc dependency introduced.
++
++## Remaining runtime tests
++
++Run these in the normal Nexora build VM/WSL/Linux environment:
++
++```bash
++make check
++make
++make run
++```
++
++Then confirm:
++
++1. Multiboot2 header verification passes.
++2. ISO is created.
++3. PCI enumeration completes.
++4. DMA copy reports `PASS`.
++5. both graph work nodes report `SIMULATED` completion.
++6. accelerator counters show at least three submissions: one DMA copy plus two work nodes.
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/docs/ROADMAP.md /mnt/data/Nexora_Phase7/docs/ROADMAP.md
+--- /mnt/data/nexora_work/aikernel-starter/docs/ROADMAP.md	2026-09-18 05:29:28.000000000 +0000
++++ /mnt/data/Nexora_Phase7/docs/ROADMAP.md	2026-09-20 05:01:32.875084375 +0000
+@@ -119,15 +119,24 @@
+ 
+ ## Milestone 7 — Real device path
+ 
+-Do **not** start with a modern NVIDIA GPU driver.
++Status: **implemented in the Phase 7 package as an experimental device path**
+ 
+-Better progression:
++Implemented:
+ 
+-1. virtio-style simulated accelerator
+-2. PCI enumeration
+-3. simple DMA-capable experimental device
+-4. accelerator backend through an intentionally narrow interface
+-5. only then consider real GPU hardware
++1. virtio-style in-kernel simulated accelerator queue
++2. x86 PCI configuration-space enumeration
++3. experimental DMA-addressable buffer path under the current identity-map model
++4. intentionally narrow accelerator backend ABI (`submit/kick/poll/reset`)
++5. PCI accelerator/display candidates registered offline until a real driver exists
++
++Still deliberately deferred:
++
++- modern NVIDIA/AMD/Intel GPU driver
++- BAR programming and MSI/MSI-X
++- IOMMU-backed isolation
++- production PCIe ECAM/MCFG support
++
++See `docs/PHASE7_REAL_DEVICE_PATH.md`.
+ 
+ ## Milestone 8 — Inference-oriented experiments
+ 
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/include/ai/accelerator.h /mnt/data/Nexora_Phase7/include/ai/accelerator.h
+--- /mnt/data/nexora_work/aikernel-starter/include/ai/accelerator.h	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/include/ai/accelerator.h	2026-09-20 04:58:57.487739035 +0000
+@@ -0,0 +1,90 @@
++#ifndef NEXORA_AI_ACCELERATOR_H
++#define NEXORA_AI_ACCELERATOR_H
++
++#include <kernel/types.h>
++#include <ai/device.h>
++#include <ai/work.h>
++
++#define AI_ACCEL_MAX_DEVICES 16
++#define AI_ACCEL_NAME_MAX    32
++
++typedef enum {
++    AI_ACCEL_TRANSPORT_SIM = 0,
++    AI_ACCEL_TRANSPORT_PCI = 1,
++    AI_ACCEL_TRANSPORT_MMIO = 2
++} ai_accel_transport;
++
++typedef enum {
++    AI_ACCEL_CMD_NOP = 0,
++    AI_ACCEL_CMD_COPY = 1,
++    AI_ACCEL_CMD_WORK = 2
++} ai_accel_command_type;
++
++typedef enum {
++    AI_ACCEL_STATUS_EMPTY = 0,
++    AI_ACCEL_STATUS_QUEUED,
++    AI_ACCEL_STATUS_RUNNING,
++    AI_ACCEL_STATUS_OK,
++    AI_ACCEL_STATUS_SIMULATED,
++    AI_ACCEL_STATUS_UNSUPPORTED,
++    AI_ACCEL_STATUS_FAILED
++} ai_accel_status;
++
++typedef struct {
++    u64 command_id;
++    ai_accel_command_type type;
++    ai_accel_status status;
++    u64 work_id;
++    ai_op op;
++    u64 src_phys;
++    u64 dst_phys;
++    u64 bytes;
++    u32 flags;
++} ai_accel_command;
++
++struct ai_accel_device;
++
++typedef struct {
++    bool (*submit)(struct ai_accel_device *device, ai_accel_command *command);
++    void (*kick)(struct ai_accel_device *device);
++    void (*poll)(struct ai_accel_device *device);
++    bool (*reset)(struct ai_accel_device *device);
++} ai_accel_ops;
++
++typedef struct ai_accel_device {
++    u32 id;
++    const char *name;
++    ai_device_mask kind;
++    ai_accel_transport transport;
++    u32 device_mask;
++    u16 vendor_id;
++    u16 device_id;
++    u8 pci_bus;
++    u8 pci_slot;
++    u8 pci_function;
++    u8 dma_address_bits;
++    u32 queue_depth;
++    bool online;
++    const ai_accel_ops *ops;
++    void *driver_data;
++
++    u64 submitted;
++    u64 completed;
++    u64 failed;
++    u64 bytes_moved;
++} ai_accel_device;
++
++void ai_accel_system_init(void);
++bool ai_accel_register(ai_accel_device *device);
++u32 ai_accel_count(void);
++ai_accel_device *ai_accel_at(u32 index);
++ai_accel_device *ai_accel_find_for_mask(u32 device_mask);
++bool ai_accel_submit(ai_accel_device *device, ai_accel_command *command);
++void ai_accel_poll_all(void);
++bool ai_accel_wait(ai_accel_device *device, ai_accel_command *command, u32 spin_limit);
++bool ai_accel_submit_work(ai_accel_device *device, const ai_work_node *node, ai_accel_command *command);
++const char *ai_accel_status_name(ai_accel_status status);
++const char *ai_accel_transport_name(ai_accel_transport transport);
++void ai_accel_print_summary(void);
++
++#endif
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/include/arch/x86_64/io.h /mnt/data/Nexora_Phase7/include/arch/x86_64/io.h
+--- /mnt/data/nexora_work/aikernel-starter/include/arch/x86_64/io.h	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/include/arch/x86_64/io.h	2026-09-20 04:58:57.455738604 +0000
+@@ -0,0 +1,40 @@
++#ifndef NEXORA_ARCH_X86_64_IO_H
++#define NEXORA_ARCH_X86_64_IO_H
++
++#include <kernel/types.h>
++
++static inline void io_out8(u16 port, u8 value) {
++    __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
++}
++
++static inline void io_out16(u16 port, u16 value) {
++    __asm__ volatile ("outw %0, %1" : : "a"(value), "Nd"(port));
++}
++
++static inline void io_out32(u16 port, u32 value) {
++    __asm__ volatile ("outl %0, %1" : : "a"(value), "Nd"(port));
++}
++
++static inline u8 io_in8(u16 port) {
++    u8 value;
++    __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
++    return value;
++}
++
++static inline u16 io_in16(u16 port) {
++    u16 value;
++    __asm__ volatile ("inw %1, %0" : "=a"(value) : "Nd"(port));
++    return value;
++}
++
++static inline u32 io_in32(u16 port) {
++    u32 value;
++    __asm__ volatile ("inl %1, %0" : "=a"(value) : "Nd"(port));
++    return value;
++}
++
++static inline void io_fence(void) {
++    __asm__ volatile ("mfence" : : : "memory");
++}
++
++#endif
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/include/drivers/nex_accel_sim.h /mnt/data/Nexora_Phase7/include/drivers/nex_accel_sim.h
+--- /mnt/data/nexora_work/aikernel-starter/include/drivers/nex_accel_sim.h	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/include/drivers/nex_accel_sim.h	2026-09-20 04:58:57.495739142 +0000
+@@ -0,0 +1,8 @@
++#ifndef NEXORA_DRIVERS_NEX_ACCEL_SIM_H
++#define NEXORA_DRIVERS_NEX_ACCEL_SIM_H
++
++#include <kernel/types.h>
++
++bool nex_accel_sim_init(void);
++
++#endif
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/include/drivers/pci_accel.h /mnt/data/Nexora_Phase7/include/drivers/pci_accel.h
+--- /mnt/data/nexora_work/aikernel-starter/include/drivers/pci_accel.h	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/include/drivers/pci_accel.h	2026-09-20 04:58:57.503739250 +0000
+@@ -0,0 +1,9 @@
++#ifndef NEXORA_DRIVERS_PCI_ACCEL_H
++#define NEXORA_DRIVERS_PCI_ACCEL_H
++
++#include <kernel/types.h>
++
++/* Registers PCI processing/display devices as discovered-but-inert backends. */
++u32 pci_accel_discover(void);
++
++#endif
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/include/kernel/dma.h /mnt/data/Nexora_Phase7/include/kernel/dma.h
+--- /mnt/data/nexora_work/aikernel-starter/include/kernel/dma.h	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/include/kernel/dma.h	2026-09-20 04:58:57.475738873 +0000
+@@ -0,0 +1,25 @@
++#ifndef NEXORA_KERNEL_DMA_H
++#define NEXORA_KERNEL_DMA_H
++
++#include <kernel/types.h>
++
++typedef struct {
++    void *virt;
++    u64 phys;
++    usize size;
++    usize alignment;
++} dma_buffer;
++
++/*
++ * Phase-7 experimental DMA allocator.
++ *
++ * The current starter kernel identity-maps low physical memory. kalloc()
++ * therefore yields a usable physical address only while that invariant
++ * remains true. Later PMM/IOMMU work must replace the translation policy.
++ */
++bool dma_alloc(dma_buffer *buffer, usize size, usize alignment);
++void dma_zero(dma_buffer *buffer);
++void dma_sync_for_device(const dma_buffer *buffer);
++void dma_sync_for_cpu(const dma_buffer *buffer);
++
++#endif
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/include/kernel/pci.h /mnt/data/Nexora_Phase7/include/kernel/pci.h
+--- /mnt/data/nexora_work/aikernel-starter/include/kernel/pci.h	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/include/kernel/pci.h	2026-09-20 04:58:57.467738765 +0000
+@@ -0,0 +1,35 @@
++#ifndef NEXORA_KERNEL_PCI_H
++#define NEXORA_KERNEL_PCI_H
++
++#include <kernel/types.h>
++
++#define PCI_MAX_DEVICES 128
++
++typedef struct {
++    u8 bus;
++    u8 slot;
++    u8 function;
++    u16 vendor_id;
++    u16 device_id;
++    u8 class_code;
++    u8 subclass;
++    u8 prog_if;
++    u8 revision;
++    u8 header_type;
++    u8 irq_line;
++    u8 irq_pin;
++    u32 bars[6];
++} pci_device;
++
++void pci_init(void);
++u32 pci_config_read32(u8 bus, u8 slot, u8 function, u8 offset);
++u16 pci_config_read16(u8 bus, u8 slot, u8 function, u8 offset);
++u8 pci_config_read8(u8 bus, u8 slot, u8 function, u8 offset);
++u32 pci_enumerate(void);
++u32 pci_device_count(void);
++const pci_device *pci_device_at(u32 index);
++bool pci_is_processing_accelerator(const pci_device *dev);
++bool pci_is_display_controller(const pci_device *dev);
++void pci_print_summary(void);
++
++#endif
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/linker.ld /mnt/data/Nexora_Phase7/linker.ld
+--- /mnt/data/nexora_work/aikernel-starter/linker.ld	2026-09-18 05:29:28.000000000 +0000
++++ /mnt/data/Nexora_Phase7/linker.ld	2026-09-20 05:02:25.660209292 +0000
+@@ -31,4 +31,11 @@
+     }
+ 
+     kernel_end = .;
++
++    /DISCARD/ :
++    {
++        *(.comment)
++        *(.eh_frame .eh_frame.*)
++        *(.note .note.*)
++    }
+ }
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/scripts/phase7_crosscheck.sh /mnt/data/Nexora_Phase7/scripts/phase7_crosscheck.sh
+--- /mnt/data/nexora_work/aikernel-starter/scripts/phase7_crosscheck.sh	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/scripts/phase7_crosscheck.sh	2026-09-20 05:02:57.842974844 +0000
+@@ -0,0 +1,61 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
++cd "$ROOT"
++
++echo "[1/8] strict compile + required symbols"
++make phase7-check
++
++echo "[2/8] checking required files"
++for f in \
++  include/arch/x86_64/io.h \
++  include/kernel/pci.h \
++  include/kernel/dma.h \
++  include/ai/accelerator.h \
++  include/drivers/nex_accel_sim.h \
++  include/drivers/pci_accel.h \
++  src/drivers/pci.c \
++  src/drivers/nex_accel_sim.c \
++  src/drivers/pci_accel.c \
++  src/mm/dma.c \
++  src/ai/accelerator.c \
++  docs/PHASE7_REAL_DEVICE_PATH.md \
++  docs/PHASE7_VALIDATION.md \
++  docs/PHASE7_INTEGRATION_NOTES.md; do
++  test -s "$f"
++done
++
++echo "[3/8] checking simulator does not claim real AI execution"
++grep -q 'AI_ACCEL_STATUS_SIMULATED' src/drivers/nex_accel_sim.c
++grep -q 'not real numerical execution' src/drivers/nex_accel_sim.c
++
++echo "[4/8] checking physical PCI candidates stay offline"
++grep -q 'device->online = false' src/drivers/pci_accel.c
++
++echo "[5/8] checking no vendor GPU API dependency was introduced"
++if grep -RniE '#include[[:space:]]*<.*(cuda|hip|opencl|vulkan)|cuInit\(|hipInit\(|clGetPlatformIDs\(' include src; then
++  echo "Unexpected vendor/runtime API dependency detected" >&2
++  exit 1
++fi
++
++echo "[6/8] checking ELF architecture and unresolved symbols"
++readelf -h build/kernel.elf | grep -q 'Machine:.*Advanced Micro Devices X86-64'
++if [[ -n "$(nm -u build/kernel.elf)" ]]; then
++  echo "Unresolved kernel symbols detected" >&2
++  nm -u build/kernel.elf >&2
++  exit 1
++fi
++
++echo "[7/8] independently verifying Multiboot2 header"
++python3 scripts/verify_multiboot2.py build/kernel.elf
++
++echo "[8/8] checking linked addresses remain inside initial identity map"
++entry_hex="$(readelf -h build/kernel.elf | awk '/Entry point address:/ {print $4}')"
++entry=$((entry_hex))
++if (( entry < 0x100000 || entry >= 0x40000000 )); then
++  echo "Kernel entry point lies outside expected 1 MiB..1 GiB identity-mapped range: $entry_hex" >&2
++  exit 1
++fi
++
++echo "Phase 7 cross-check: PASS"
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/scripts/verify_multiboot2.py /mnt/data/Nexora_Phase7/scripts/verify_multiboot2.py
+--- /mnt/data/nexora_work/aikernel-starter/scripts/verify_multiboot2.py	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/scripts/verify_multiboot2.py	2026-09-20 05:02:57.826974628 +0000
+@@ -0,0 +1,36 @@
++#!/usr/bin/env python3
++"""Minimal independent Multiboot2-header verifier for the Nexora kernel ELF."""
++from __future__ import annotations
++
++import struct
++import sys
++from pathlib import Path
++
++MAGIC = 0xE85250D6
++SEARCH_LIMIT = 32768
++
++
++def verify(path: Path) -> None:
++    data = path.read_bytes()[:SEARCH_LIMIT]
++    for offset in range(0, max(0, len(data) - 16) + 1, 8):
++        magic, arch, length, checksum = struct.unpack_from("<IIII", data, offset)
++        if magic != MAGIC:
++            continue
++        if arch != 0:
++            raise SystemExit(f"Multiboot2 header at {offset:#x} has unsupported arch {arch}")
++        if length < 24 or offset + length > SEARCH_LIMIT or offset + length > len(data):
++            raise SystemExit(f"Multiboot2 header at {offset:#x} has invalid length {length}")
++        if (magic + arch + length + checksum) & 0xFFFFFFFF:
++            raise SystemExit("Multiboot2 checksum mismatch")
++        end_type, end_flags, end_size = struct.unpack_from("<HHI", data, offset + length - 8)
++        if (end_type, end_flags, end_size) != (0, 0, 8):
++            raise SystemExit("Multiboot2 end tag missing or malformed")
++        print(f"Multiboot2 header verified at file offset {offset:#x}, length {length}")
++        return
++    raise SystemExit("No valid aligned Multiboot2 header found in first 32768 bytes")
++
++
++if __name__ == "__main__":
++    if len(sys.argv) != 2:
++        raise SystemExit("usage: verify_multiboot2.py <kernel.elf>")
++    verify(Path(sys.argv[1]))
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/src/ai/accelerator.c /mnt/data/Nexora_Phase7/src/ai/accelerator.c
+--- /mnt/data/nexora_work/aikernel-starter/src/ai/accelerator.c	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/src/ai/accelerator.c	2026-09-20 04:59:20.580049261 +0000
+@@ -0,0 +1,156 @@
++#include <ai/accelerator.h>
++#include <kernel/printk.h>
++
++static ai_accel_device *registry[AI_ACCEL_MAX_DEVICES];
++static u32 count = 0;
++
++void ai_accel_system_init(void) {
++    count = 0;
++    for (u32 i = 0; i < AI_ACCEL_MAX_DEVICES; ++i) {
++        registry[i] = NULL;
++    }
++}
++
++bool ai_accel_register(ai_accel_device *device) {
++    if (!device || !device->ops || count >= AI_ACCEL_MAX_DEVICES) {
++        return false;
++    }
++    device->id = count + 1;
++    registry[count++] = device;
++    return true;
++}
++
++u32 ai_accel_count(void) {
++    return count;
++}
++
++ai_accel_device *ai_accel_at(u32 index) {
++    if (index >= count) {
++        return NULL;
++    }
++    return registry[index];
++}
++
++ai_accel_device *ai_accel_find_for_mask(u32 device_mask) {
++    for (u32 i = 0; i < count; ++i) {
++        ai_accel_device *dev = registry[i];
++        if (dev->online && (dev->device_mask & device_mask) != 0u) {
++            return dev;
++        }
++    }
++    return NULL;
++}
++
++bool ai_accel_submit(ai_accel_device *device, ai_accel_command *command) {
++    if (!device || !device->online || !device->ops || !device->ops->submit || !command) {
++        return false;
++    }
++
++    command->status = AI_ACCEL_STATUS_QUEUED;
++    if (!device->ops->submit(device, command)) {
++        command->status = AI_ACCEL_STATUS_FAILED;
++        device->failed++;
++        return false;
++    }
++
++    device->submitted++;
++    if (device->ops->kick) {
++        device->ops->kick(device);
++    }
++    return true;
++}
++
++void ai_accel_poll_all(void) {
++    for (u32 i = 0; i < count; ++i) {
++        ai_accel_device *dev = registry[i];
++        if (dev->online && dev->ops && dev->ops->poll) {
++            dev->ops->poll(dev);
++        }
++    }
++}
++
++bool ai_accel_wait(ai_accel_device *device, ai_accel_command *command, u32 spin_limit) {
++    if (!device || !command) {
++        return false;
++    }
++
++    for (u32 spin = 0; spin < spin_limit; ++spin) {
++        if (device->ops && device->ops->poll) {
++            device->ops->poll(device);
++        }
++        if (command->status == AI_ACCEL_STATUS_OK ||
++            command->status == AI_ACCEL_STATUS_SIMULATED) {
++            return true;
++        }
++        if (command->status == AI_ACCEL_STATUS_FAILED ||
++            command->status == AI_ACCEL_STATUS_UNSUPPORTED) {
++            return false;
++        }
++    }
++    return false;
++}
++
++bool ai_accel_submit_work(ai_accel_device *device, const ai_work_node *node, ai_accel_command *command) {
++    if (!device || !node || !command) {
++        return false;
++    }
++
++    command->command_id = device->submitted + 1;
++    command->type = AI_ACCEL_CMD_WORK;
++    command->status = AI_ACCEL_STATUS_EMPTY;
++    command->work_id = node->id;
++    command->op = node->op;
++    command->src_phys = 0;
++    command->dst_phys = 0;
++    command->bytes = 0;
++    command->flags = 0;
++    return ai_accel_submit(device, command);
++}
++
++const char *ai_accel_status_name(ai_accel_status status) {
++    switch (status) {
++        case AI_ACCEL_STATUS_EMPTY: return "EMPTY";
++        case AI_ACCEL_STATUS_QUEUED: return "QUEUED";
++        case AI_ACCEL_STATUS_RUNNING: return "RUNNING";
++        case AI_ACCEL_STATUS_OK: return "OK";
++        case AI_ACCEL_STATUS_SIMULATED: return "SIMULATED";
++        case AI_ACCEL_STATUS_UNSUPPORTED: return "UNSUPPORTED";
++        case AI_ACCEL_STATUS_FAILED: return "FAILED";
++        default: return "UNKNOWN";
++    }
++}
++
++const char *ai_accel_transport_name(ai_accel_transport transport) {
++    switch (transport) {
++        case AI_ACCEL_TRANSPORT_SIM: return "sim";
++        case AI_ACCEL_TRANSPORT_PCI: return "pci";
++        case AI_ACCEL_TRANSPORT_MMIO: return "mmio";
++        default: return "unknown";
++    }
++}
++
++void ai_accel_print_summary(void) {
++    kputs("Accelerator backends: ");
++    kprint_u64(count);
++    kputs("\n");
++    for (u32 i = 0; i < count; ++i) {
++        const ai_accel_device *dev = registry[i];
++        kputs("  accel id=");
++        kprint_u64(dev->id);
++        kputs(" name=");
++        kputs(dev->name);
++        kputs(" transport=");
++        kputs(ai_accel_transport_name(dev->transport));
++        kputs(" online=");
++        kputs(dev->online ? "yes" : "no");
++        kputs(" submitted=");
++        kprint_u64(dev->submitted);
++        kputs(" completed=");
++        kprint_u64(dev->completed);
++        kputs(" failed=");
++        kprint_u64(dev->failed);
++        kputs(" bytes=");
++        kprint_u64(dev->bytes_moved);
++        kputs("\n");
++    }
++}
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/src/arch/x86_64/boot.S /mnt/data/Nexora_Phase7/src/arch/x86_64/boot.S
+--- /mnt/data/nexora_work/aikernel-starter/src/arch/x86_64/boot.S	2026-09-18 05:29:28.000000000 +0000
++++ /mnt/data/Nexora_Phase7/src/arch/x86_64/boot.S	2026-09-20 05:02:25.659813745 +0000
+@@ -11,7 +11,7 @@
+ .set MB2_HEADER_LEN,  multiboot_header_end - multiboot_header
+ .set MB2_CHECKSUM,    -(MB2_MAGIC + MB2_ARCH + MB2_HEADER_LEN)
+ 
+-.section .multiboot_header
++.section .multiboot_header,"a"
+ .align 8
+ multiboot_header:
+     .long MB2_MAGIC
+@@ -25,7 +25,7 @@
+     .long 8
+ multiboot_header_end:
+ 
+-.section .text
++.section .text,"ax"
+ .global _start
+ .extern kmain
+ 
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/src/drivers/nex_accel_sim.c /mnt/data/Nexora_Phase7/src/drivers/nex_accel_sim.c
+--- /mnt/data/nexora_work/aikernel-starter/src/drivers/nex_accel_sim.c	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/src/drivers/nex_accel_sim.c	2026-09-20 04:59:42.928349981 +0000
+@@ -0,0 +1,148 @@
++#include <drivers/nex_accel_sim.h>
++#include <ai/accelerator.h>
++#include <kernel/memory.h>
++#include <arch/x86_64/io.h>
++
++#define NEX_SIM_QUEUE_DEPTH 32
++
++typedef struct {
++    ai_accel_command *slots[NEX_SIM_QUEUE_DEPTH];
++    u32 producer;
++    u32 consumer;
++    u32 pending;
++} nex_sim_state;
++
++static ai_accel_device sim_device;
++static nex_sim_state sim_state;
++
++static void copy_phys(u64 src_phys, u64 dst_phys, u64 bytes) {
++    const volatile u8 *src = (const volatile u8 *)(usize)src_phys;
++    volatile u8 *dst = (volatile u8 *)(usize)dst_phys;
++    for (u64 i = 0; i < bytes; ++i) {
++        dst[i] = src[i];
++    }
++    io_fence();
++}
++
++static bool sim_submit(ai_accel_device *device, ai_accel_command *command) {
++    nex_sim_state *state = (nex_sim_state *)device->driver_data;
++    if (!state || state->pending >= NEX_SIM_QUEUE_DEPTH) {
++        return false;
++    }
++
++    state->slots[state->producer] = command;
++    state->producer = (state->producer + 1u) % NEX_SIM_QUEUE_DEPTH;
++    state->pending++;
++    return true;
++}
++
++static void sim_execute(ai_accel_device *device, ai_accel_command *command) {
++    command->status = AI_ACCEL_STATUS_RUNNING;
++
++    switch (command->type) {
++        case AI_ACCEL_CMD_NOP:
++            command->status = AI_ACCEL_STATUS_OK;
++            break;
++        case AI_ACCEL_CMD_COPY:
++            if (command->src_phys == 0 || command->dst_phys == 0) {
++                command->status = AI_ACCEL_STATUS_FAILED;
++                device->failed++;
++                break;
++            }
++            copy_phys(command->src_phys, command->dst_phys, command->bytes);
++            device->bytes_moved += command->bytes;
++            command->status = AI_ACCEL_STATUS_OK;
++            break;
++        case AI_ACCEL_CMD_WORK:
++            /*
++             * This backend intentionally models queueing/dispatch/completion,
++             * not real numerical execution. Returning SIMULATED prevents the
++             * kernel from confusing a transport-path test with real inference.
++             */
++            command->status = AI_ACCEL_STATUS_SIMULATED;
++            break;
++        default:
++            command->status = AI_ACCEL_STATUS_UNSUPPORTED;
++            device->failed++;
++            break;
++    }
++
++    if (command->status == AI_ACCEL_STATUS_OK ||
++        command->status == AI_ACCEL_STATUS_SIMULATED) {
++        device->completed++;
++    }
++}
++
++static void sim_kick(ai_accel_device *device) {
++    nex_sim_state *state = (nex_sim_state *)device->driver_data;
++    if (!state) {
++        return;
++    }
++
++    while (state->pending > 0) {
++        ai_accel_command *command = state->slots[state->consumer];
++        state->slots[state->consumer] = NULL;
++        state->consumer = (state->consumer + 1u) % NEX_SIM_QUEUE_DEPTH;
++        state->pending--;
++        if (command) {
++            sim_execute(device, command);
++        }
++    }
++}
++
++static void sim_poll(ai_accel_device *device) {
++    sim_kick(device);
++}
++
++static bool sim_reset(ai_accel_device *device) {
++    nex_sim_state *state = (nex_sim_state *)device->driver_data;
++    if (!state) {
++        return false;
++    }
++
++    for (u32 i = 0; i < NEX_SIM_QUEUE_DEPTH; ++i) {
++        state->slots[i] = NULL;
++    }
++    state->producer = 0;
++    state->consumer = 0;
++    state->pending = 0;
++    return true;
++}
++
++static const ai_accel_ops sim_ops = {
++    .submit = sim_submit,
++    .kick = sim_kick,
++    .poll = sim_poll,
++    .reset = sim_reset
++};
++
++bool nex_accel_sim_init(void) {
++    for (u32 i = 0; i < NEX_SIM_QUEUE_DEPTH; ++i) {
++        sim_state.slots[i] = NULL;
++    }
++    sim_state.producer = 0;
++    sim_state.consumer = 0;
++    sim_state.pending = 0;
++
++    sim_device.id = 0;
++    sim_device.name = "nexora-sim-accel";
++    sim_device.kind = AI_DEVICE_NPU;
++    sim_device.transport = AI_ACCEL_TRANSPORT_SIM;
++    sim_device.device_mask = AI_DEVICE_GPU | AI_DEVICE_NPU;
++    sim_device.vendor_id = 0;
++    sim_device.device_id = 0;
++    sim_device.pci_bus = 0;
++    sim_device.pci_slot = 0;
++    sim_device.pci_function = 0;
++    sim_device.dma_address_bits = 64;
++    sim_device.queue_depth = NEX_SIM_QUEUE_DEPTH;
++    sim_device.online = true;
++    sim_device.ops = &sim_ops;
++    sim_device.driver_data = &sim_state;
++    sim_device.submitted = 0;
++    sim_device.completed = 0;
++    sim_device.failed = 0;
++    sim_device.bytes_moved = 0;
++
++    return ai_accel_register(&sim_device);
++}
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/src/drivers/pci.c /mnt/data/Nexora_Phase7/src/drivers/pci.c
+--- /mnt/data/nexora_work/aikernel-starter/src/drivers/pci.c	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/src/drivers/pci.c	2026-09-20 04:59:20.572049154 +0000
+@@ -0,0 +1,140 @@
++#include <kernel/pci.h>
++#include <kernel/printk.h>
++#include <arch/x86_64/io.h>
++
++#define PCI_CONFIG_ADDRESS 0xCF8
++#define PCI_CONFIG_DATA    0xCFC
++#define PCI_VENDOR_NONE    0xFFFFu
++
++static pci_device devices[PCI_MAX_DEVICES];
++static u32 count = 0;
++
++static u32 pci_address(u8 bus, u8 slot, u8 function, u8 offset) {
++    return (1u << 31)
++        | ((u32)bus << 16)
++        | ((u32)slot << 11)
++        | ((u32)function << 8)
++        | ((u32)offset & 0xFCu);
++}
++
++void pci_init(void) {
++    count = 0;
++}
++
++u32 pci_config_read32(u8 bus, u8 slot, u8 function, u8 offset) {
++    io_out32(PCI_CONFIG_ADDRESS, pci_address(bus, slot, function, offset));
++    return io_in32(PCI_CONFIG_DATA);
++}
++
++u16 pci_config_read16(u8 bus, u8 slot, u8 function, u8 offset) {
++    u32 value = pci_config_read32(bus, slot, function, offset);
++    return (u16)((value >> ((offset & 2u) * 8u)) & 0xFFFFu);
++}
++
++u8 pci_config_read8(u8 bus, u8 slot, u8 function, u8 offset) {
++    u32 value = pci_config_read32(bus, slot, function, offset);
++    return (u8)((value >> ((offset & 3u) * 8u)) & 0xFFu);
++}
++
++static bool function_present(u8 bus, u8 slot, u8 function) {
++    return pci_config_read16(bus, slot, function, 0x00) != PCI_VENDOR_NONE;
++}
++
++static void capture_device(u8 bus, u8 slot, u8 function) {
++    if (count >= PCI_MAX_DEVICES) {
++        return;
++    }
++
++    pci_device *dev = &devices[count++];
++    dev->bus = bus;
++    dev->slot = slot;
++    dev->function = function;
++    dev->vendor_id = pci_config_read16(bus, slot, function, 0x00);
++    dev->device_id = pci_config_read16(bus, slot, function, 0x02);
++    dev->revision = pci_config_read8(bus, slot, function, 0x08);
++    dev->prog_if = pci_config_read8(bus, slot, function, 0x09);
++    dev->subclass = pci_config_read8(bus, slot, function, 0x0A);
++    dev->class_code = pci_config_read8(bus, slot, function, 0x0B);
++    dev->header_type = pci_config_read8(bus, slot, function, 0x0E);
++    dev->irq_line = pci_config_read8(bus, slot, function, 0x3C);
++    dev->irq_pin = pci_config_read8(bus, slot, function, 0x3D);
++
++    for (u32 i = 0; i < 6; ++i) {
++        dev->bars[i] = pci_config_read32(bus, slot, function, (u8)(0x10 + 4 * i));
++    }
++}
++
++u32 pci_enumerate(void) {
++    count = 0;
++
++    for (u32 bus = 0; bus < 256; ++bus) {
++        for (u32 slot = 0; slot < 32; ++slot) {
++            if (!function_present((u8)bus, (u8)slot, 0)) {
++                continue;
++            }
++
++            capture_device((u8)bus, (u8)slot, 0);
++            u8 header = pci_config_read8((u8)bus, (u8)slot, 0, 0x0E);
++            if ((header & 0x80u) == 0) {
++                continue;
++            }
++
++            for (u32 function = 1; function < 8; ++function) {
++                if (function_present((u8)bus, (u8)slot, (u8)function)) {
++                    capture_device((u8)bus, (u8)slot, (u8)function);
++                }
++            }
++        }
++    }
++
++    return count;
++}
++
++u32 pci_device_count(void) {
++    return count;
++}
++
++const pci_device *pci_device_at(u32 index) {
++    if (index >= count) {
++        return NULL;
++    }
++    return &devices[index];
++}
++
++bool pci_is_processing_accelerator(const pci_device *dev) {
++    return dev && dev->class_code == 0x12u;
++}
++
++bool pci_is_display_controller(const pci_device *dev) {
++    return dev && dev->class_code == 0x03u;
++}
++
++void pci_print_summary(void) {
++    kputs("PCI devices discovered: ");
++    kprint_u64(count);
++    kputs("\n");
++
++    for (u32 i = 0; i < count; ++i) {
++        const pci_device *dev = &devices[i];
++        kputs("  PCI ");
++        kprint_u64(dev->bus);
++        kputs(":");
++        kprint_u64(dev->slot);
++        kputs(".");
++        kprint_u64(dev->function);
++        kputs(" vendor=");
++        kprint_hex(dev->vendor_id);
++        kputs(" device=");
++        kprint_hex(dev->device_id);
++        kputs(" class=");
++        kprint_hex(dev->class_code);
++        kputs(" subclass=");
++        kprint_hex(dev->subclass);
++        if (pci_is_processing_accelerator(dev)) {
++            kputs(" [processing-accelerator]");
++        } else if (pci_is_display_controller(dev)) {
++            kputs(" [display-controller]");
++        }
++        kputs("\n");
++    }
++}
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/src/drivers/pci_accel.c /mnt/data/Nexora_Phase7/src/drivers/pci_accel.c
+--- /mnt/data/nexora_work/aikernel-starter/src/drivers/pci_accel.c	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/src/drivers/pci_accel.c	2026-09-20 04:59:42.936350089 +0000
+@@ -0,0 +1,72 @@
++#include <drivers/pci_accel.h>
++#include <kernel/pci.h>
++#include <kernel/memory.h>
++#include <ai/accelerator.h>
++
++static bool inert_submit(ai_accel_device *device, ai_accel_command *command) {
++    (void)device;
++    if (command) {
++        command->status = AI_ACCEL_STATUS_UNSUPPORTED;
++    }
++    return false;
++}
++
++static void inert_kick(ai_accel_device *device) {
++    (void)device;
++}
++
++static void inert_poll(ai_accel_device *device) {
++    (void)device;
++}
++
++static bool inert_reset(ai_accel_device *device) {
++    (void)device;
++    return true;
++}
++
++static const ai_accel_ops inert_ops = {
++    .submit = inert_submit,
++    .kick = inert_kick,
++    .poll = inert_poll,
++    .reset = inert_reset
++};
++
++u32 pci_accel_discover(void) {
++    u32 registered = 0;
++
++    for (u32 i = 0; i < pci_device_count(); ++i) {
++        const pci_device *pci = pci_device_at(i);
++        if (!pci || (!pci_is_processing_accelerator(pci) && !pci_is_display_controller(pci))) {
++            continue;
++        }
++
++        ai_accel_device *device = (ai_accel_device *)kalloc(sizeof(ai_accel_device), 16);
++        device->id = 0;
++        device->name = pci_is_processing_accelerator(pci)
++            ? "pci-processing-accelerator"
++            : "pci-display-controller";
++        device->kind = pci_is_processing_accelerator(pci) ? AI_DEVICE_NPU : AI_DEVICE_GPU;
++        device->transport = AI_ACCEL_TRANSPORT_PCI;
++        device->device_mask = (u32)device->kind;
++        device->vendor_id = pci->vendor_id;
++        device->device_id = pci->device_id;
++        device->pci_bus = pci->bus;
++        device->pci_slot = pci->slot;
++        device->pci_function = pci->function;
++        device->dma_address_bits = 0;
++        device->queue_depth = 0;
++        device->online = false;
++        device->ops = &inert_ops;
++        device->driver_data = NULL;
++        device->submitted = 0;
++        device->completed = 0;
++        device->failed = 0;
++        device->bytes_moved = 0;
++
++        if (ai_accel_register(device)) {
++            registered++;
++        }
++    }
++
++    return registered;
++}
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/src/kernel/kmain.c /mnt/data/Nexora_Phase7/src/kernel/kmain.c
+--- /mnt/data/nexora_work/aikernel-starter/src/kernel/kmain.c	2026-09-18 05:29:28.000000000 +0000
++++ /mnt/data/Nexora_Phase7/src/kernel/kmain.c	2026-09-20 05:00:09.164703393 +0000
+@@ -1,9 +1,14 @@
+ #include <kernel/printk.h>
+ #include <kernel/memory.h>
++#include <kernel/pci.h>
++#include <kernel/dma.h>
+ #include <ai/tensor.h>
+ #include <ai/work.h>
+ #include <ai/scheduler.h>
+ #include <ai/capability.h>
++#include <ai/accelerator.h>
++#include <drivers/nex_accel_sim.h>
++#include <drivers/pci_accel.h>
+ 
+ static void print_tensor(const ai_tensor *t) {
+     kputs("tensor ");
+@@ -33,8 +38,61 @@
+     kputs("\n");
+ }
+ 
+-static void run_demo(void) {
+-    kputs("\n[AIKernel demo]\n");
++static bool bytes_equal(const u8 *a, const u8 *b, usize size) {
++    for (usize i = 0; i < size; ++i) {
++        if (a[i] != b[i]) {
++            return false;
++        }
++    }
++    return true;
++}
++
++static void run_phase7_dma_demo(void) {
++    kputs("\n[Phase 7 DMA + simulated accelerator]\n");
++
++    dma_buffer src;
++    dma_buffer dst;
++    if (!dma_alloc(&src, 256, 64) || !dma_alloc(&dst, 256, 64)) {
++        kputs("DMA allocation failed.\n");
++        return;
++    }
++
++    u8 *src_bytes = (u8 *)src.virt;
++    for (usize i = 0; i < src.size; ++i) {
++        src_bytes[i] = (u8)(i ^ 0xA5u);
++    }
++    dma_sync_for_device(&src);
++
++    ai_accel_device *device = ai_accel_find_for_mask(AI_DEVICE_NPU);
++    if (!device) {
++        kputs("No online simulated accelerator found.\n");
++        return;
++    }
++
++    ai_accel_command command;
++    command.command_id = 1;
++    command.type = AI_ACCEL_CMD_COPY;
++    command.status = AI_ACCEL_STATUS_EMPTY;
++    command.work_id = 0;
++    command.op = AI_OP_TRANSFER;
++    command.src_phys = src.phys;
++    command.dst_phys = dst.phys;
++    command.bytes = src.size;
++    command.flags = 0;
++
++    bool submitted = ai_accel_submit(device, &command);
++    bool completed = submitted && ai_accel_wait(device, &command, 1000);
++    dma_sync_for_cpu(&dst);
++    bool copied = completed && bytes_equal((const u8 *)src.virt, (const u8 *)dst.virt, src.size);
++
++    kputs("DMA command status: ");
++    kputs(ai_accel_status_name(command.status));
++    kputs("\nDMA copy verification: ");
++    kputs(copied ? "PASS\n" : "FAIL\n");
++}
++
++static void run_ai_graph_demo(void) {
++    kputs("\n[Nexora AI work graph]\n");
+ 
+     u64 input_shape[2]   = {1, 4096};
+     u64 weight_shape[2]  = {4096, 4096};
+@@ -114,21 +172,32 @@
+     print_work(matmul);
+     print_work(activation);
+ 
+-    ai_work_node *selected = ai_scheduler_pick(&scheduler);
+-    kputs("scheduler selected node ");
+-    kprint_u64(selected ? selected->id : 0);
+-    kputs("\n");
+-
+-    ai_scheduler_mark_running(&scheduler, selected);
+-    ai_scheduler_mark_done(&scheduler, selected);
+-
+-    selected = ai_scheduler_pick(&scheduler);
+-    kputs("scheduler selected node ");
+-    kprint_u64(selected ? selected->id : 0);
+-    kputs("\n");
+-
+-    ai_scheduler_mark_running(&scheduler, selected);
+-    ai_scheduler_mark_done(&scheduler, selected);
++    for (;;) {
++        ai_work_node *selected = ai_scheduler_pick(&scheduler);
++        if (!selected) {
++            break;
++        }
++
++        kputs("scheduler selected node ");
++        kprint_u64(selected->id);
++        kputs("\n");
++        ai_scheduler_mark_running(&scheduler, selected);
++
++        ai_accel_device *device = ai_accel_find_for_mask(selected->device_mask);
++        ai_accel_command command;
++        bool submitted = device && ai_accel_submit_work(device, selected, &command);
++        bool completed = submitted && ai_accel_wait(device, &command, 1000);
++
++        kputs("device path result: ");
++        kputs(submitted ? ai_accel_status_name(command.status) : "NO_BACKEND");
++        kputs("\n");
++
++        if (completed) {
++            ai_scheduler_mark_done(&scheduler, selected);
++        } else {
++            selected->state = AI_WORK_FAILED;
++        }
++    }
+ 
+     ai_capability agent_cap = ai_cap_create(
+         42,
+@@ -137,28 +206,50 @@
+ 
+     kputs("agent 42 GPU capability: ");
+     kputs(ai_cap_has(&agent_cap, AI_CAP_GPU_USE) ? "yes\n" : "no\n");
++}
+ 
+-    kputs("early heap used: ");
+-    kprint_u64(early_heap_used());
+-    kputs(" / ");
+-    kprint_u64(early_heap_capacity());
+-    kputs(" bytes\n");
++static void run_phase7_device_discovery(void) {
++    kputs("\n[Phase 7 device discovery]\n");
++    pci_init();
++    pci_enumerate();
++    pci_print_summary();
++
++    u32 inert = pci_accel_discover();
++    kputs("PCI accelerator candidates registered (offline): ");
++    kprint_u64(inert);
++    kputs("\n");
+ }
+ 
+ void kmain(void) {
+     console_init();
+ 
+-    kputs("AIKernel x86_64 booted.\n");
++    kputs("Nexora AI-native kernel booted.\n");
+ 
+     early_heap_init();
+     kputs("Early heap initialized.\n");
+ 
+     ai_tensor_system_init();
++    ai_accel_system_init();
+     kputs("AI runtime metadata initialized.\n");
+ 
+-    run_demo();
++    if (nex_accel_sim_init()) {
++        kputs("Simulated accelerator registered.\n");
++    } else {
++        kputs("Simulated accelerator registration failed.\n");
++    }
++
++    run_phase7_device_discovery();
++    run_phase7_dma_demo();
++    run_ai_graph_demo();
++    ai_accel_print_summary();
++
++    kputs("early heap used: ");
++    kprint_u64(early_heap_used());
++    kputs(" / ");
++    kprint_u64(early_heap_capacity());
++    kputs(" bytes\n");
+ 
+-    kputs("\nAIKernel initialization complete.\n");
++    kputs("\nNexora Phase 7 initialization complete.\n");
+     kputs("Halting CPU.\n");
+ 
+     for (;;) {
+diff -ruN '--exclude=build' '--exclude=dist' /mnt/data/nexora_work/aikernel-starter/src/mm/dma.c /mnt/data/Nexora_Phase7/src/mm/dma.c
+--- /mnt/data/nexora_work/aikernel-starter/src/mm/dma.c	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/Nexora_Phase7/src/mm/dma.c	2026-09-20 04:59:20.560048992 +0000
+@@ -0,0 +1,42 @@
++#include <kernel/dma.h>
++#include <kernel/memory.h>
++#include <arch/x86_64/io.h>
++
++bool dma_alloc(dma_buffer *buffer, usize size, usize alignment) {
++    if (!buffer || size == 0) {
++        return false;
++    }
++
++    if (alignment < 64) {
++        alignment = 64;
++    }
++
++    void *ptr = kalloc(size, alignment);
++    buffer->virt = ptr;
++    buffer->phys = (u64)(usize)ptr;
++    buffer->size = size;
++    buffer->alignment = alignment;
++    dma_zero(buffer);
++    return true;
++}
++
++void dma_zero(dma_buffer *buffer) {
++    if (!buffer || !buffer->virt) {
++        return;
++    }
++    volatile u8 *p = (volatile u8 *)buffer->virt;
++    for (usize i = 0; i < buffer->size; ++i) {
++        p[i] = 0;
++    }
++    io_fence();
++}
++
++void dma_sync_for_device(const dma_buffer *buffer) {
++    (void)buffer;
++    io_fence();
++}
++
++void dma_sync_for_cpu(const dma_buffer *buffer) {
++    (void)buffer;
++    io_fence();
++}

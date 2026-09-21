@@ -1,0 +1,2437 @@
+diff --git a/Makefile b/Makefile
+index 3b103b0..2735ccf 100644
+--- a/Makefile
++++ b/Makefile
+@@ -24,6 +24,8 @@ C_SOURCES := \
+ 	src/ai/tensor.c \
+ 	src/ai/work.c \
+ 	src/ai/capability.c \
++	src/ai/policy.c \
++	src/ai/policy_demo.c \
+ 	src/ai/scheduler.c
+ 
+ ASM_SOURCES := src/arch/x86_64/boot.S
+@@ -31,7 +33,7 @@ ASM_SOURCES := src/arch/x86_64/boot.S
+ OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(C_SOURCES)) \
+            $(patsubst %.S,$(BUILD)/%.o,$(ASM_SOURCES))
+ 
+-.PHONY: all clean run debug check
++.PHONY: all clean run debug check phase11-test phase11-sanitize phase11-analyze phase11-crosscheck
+ 
+ all: $(ISO)
+ 
+@@ -87,3 +89,33 @@ debug: $(ISO)
+ 
+ clean:
+ 	rm -rf $(BUILD)
++
++
++phase11-test:
++	@mkdir -p $(BUILD)
++	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
++		tests/phase11_policy_test.c src/ai/policy.c -o $(BUILD)/phase11_policy_test
++	$(BUILD)/phase11_policy_test
++	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
++		tests/phase11_property_test.c src/ai/policy.c -o $(BUILD)/phase11_property_test
++	$(BUILD)/phase11_property_test
++
++
++phase11-sanitize:
++	@mkdir -p $(BUILD)/san
++	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror \
++		-fsanitize=address,undefined -fno-omit-frame-pointer -Iinclude \
++		tests/phase11_policy_test.c src/ai/policy.c -o $(BUILD)/san/phase11_policy_test
++	$(BUILD)/san/phase11_policy_test
++	$(CC) -std=c11 -O1 -g -Wall -Wextra -Werror \
++		-fsanitize=address,undefined -fno-omit-frame-pointer -Iinclude \
++		tests/phase11_property_test.c src/ai/policy.c -o $(BUILD)/san/phase11_property_test
++	$(BUILD)/san/phase11_property_test
++
++phase11-analyze:
++	@mkdir -p $(BUILD)/analyze
++	$(CC) -std=c11 -O0 -Wall -Wextra -Werror -fanalyzer -Iinclude \
++		-c src/ai/policy.c -o $(BUILD)/analyze/policy.o
++
++phase11-crosscheck:
++	./scripts/phase11_crosscheck.sh
+diff --git a/PHASE11.md b/PHASE11.md
+new file mode 100644
+index 0000000..15750e5
+--- /dev/null
++++ b/PHASE11.md
+@@ -0,0 +1,52 @@
++# Nexora — Phase 11.1
++
++## Formal Security, Policy Enforcement, and Hardening Corrections
++
++Phase 11 converts the Phase 10 agent-capability concept into an enforceable, testable policy core. Phase 11.1 is the hardening pass performed after an independent cross-check found edge cases in effect validation, wildcard-sentinel handling, grant-table lifecycle, management-operation trust semantics, and reproducibility of the phase gate.
++
++### Ten implementation gates
++
++1. **Formal security contract** — authorization and delegation semantics are explicit and executable.
++2. **Typed resource identity** — tensors, models, devices, endpoints, remote tensors, and collectives use distinct resource kinds.
++3. **Deny-by-default evaluator** — no complete matching allow means denial; explicit deny has precedence.
++4. **Per-operation quantitative admission** — time, per-request byte demand, and per-request accelerator demand are checked against grant ceilings. These are not cumulative accounting mechanisms.
++5. **Attenuating delegation** — child grants cannot add rights, widen scope, extend time, increase byte ceilings, or increase quota ceilings.
++6. **Revocation and lifecycle** — targeted revocation cascades to descendants; epoch bump globally invalidates prior grants; inactive slots are reclaimable without relocating active grants.
++7. **Audit ring** — authorization, delegation, revocation, and epoch changes receive ordered reason-coded records.
++8. **Kernel integration contract** — the policy module is freestanding and documents management-call trust, external synchronization, and authorization/commit TOCTOU requirements.
++9. **Adversarial host tests** — escalation, wildcard widening, wildcard-sentinel request misuse, invalid effects, quota bypass, expiry, deny override, revocation, table exhaustion, reclamation, and audit wrapping are tested.
++10. **Reproducible phase gate** — deterministic/property tests, ASan/UBSan, GCC static analysis, freestanding compile, clean kernel link, dependency checks, source regression checks, and package checksums run from one script.
++
++### Phase 11.1 corrections
++
++The hardening pass specifically fixes:
++
++- invalid `ai_policy_effect` values being accepted by grant creation and invariant validation;
++- `AI_POLICY_ANY_ID` being usable as a concrete request object ID;
++- permanent grant-table exhaustion after revocation or epoch invalidation;
++- ambiguity about `actor_subject_id` on revoke/epoch operations;
++- ambiguity between per-request ceilings and cumulative byte/GPU accounting;
++- undocumented SMP/concurrency and authorization-to-operation TOCTOU requirements;
++- the previous phase gate not actually rerunning sanitizer/static-analysis checks itself.
++
++### Exit criteria
++
++Phase 11.1 is complete when:
++
++- deterministic and property tests pass under `-Wall -Wextra -Werror`;
++- ASan + UBSan host tests pass;
++- GCC `-fanalyzer` passes for the policy core;
++- `policy.c` compiles freestanding;
++- the clean x86-64 kernel ELF links with the module;
++- no unexpected libc dependency is introduced;
++- structural policy invariants pass;
++- no tested delegation increases authority;
++- revocation removes descendant authority;
++- inactive grant slots can be reused under table pressure;
++- wildcard sentinels cannot be submitted as concrete request object IDs;
++- audit retrieval remains ordered after wraparound;
++- release-package checksums verify.
++
++### Remaining boundary
++
++Phase 11.1 is still a **logical policy core**, not complete hardware/resource isolation. Real enforcement points must provide trusted subject/resource identities and trusted byte/quota demand, externally synchronize the engine on SMP systems, and prevent authorization/commit races. Cumulative bandwidth/byte budgets, hardware GPU partitioning, IOMMU isolation, persistent sealed audit, distributed identity, and cryptographic capability integrity remain later work.
+diff --git a/PHASE11_1_CORRECTIONS.md b/PHASE11_1_CORRECTIONS.md
+new file mode 100644
+index 0000000..67b6a72
+--- /dev/null
++++ b/PHASE11_1_CORRECTIONS.md
+@@ -0,0 +1,17 @@
++# Phase 11.1 Correction Ledger
++
++This file records the findings from the post-Phase-11 cross-check and the corresponding correction.
++
++| Finding | Phase 11.1 correction | Verification |
++|---|---|---|
++| Invalid policy effects could be inserted | `valid_effect()` is enforced by `ai_policy_add_grant()` and `ai_policy_validate()`; new `BAD_EFFECT` invariant code | deterministic regression test + source gate |
++| `AI_POLICY_ANY_ID` could be used as a request object | concrete requests reject the wildcard sentinel with `DENY_INVALID_REQUEST` | deterministic regression test |
++| 128 historical grants could permanently exhaust storage | inactive grants can be reclaimed into stable holes; allocation reuses holes; epoch bump reclaims all stale slots | full-table/revoke/reissue and epoch-reuse tests |
++| Reclamation could risk pointer instability if implemented by compaction | active grants are never relocated; reclamation marks inactive slots free and trims only free tail slots | implementation review + invariant tests |
++| Revoke/epoch actor looked like an authorization input | header/security docs now state that these are trusted kernel-management primitives and `actor_subject_id` is audit attribution only | source/document gate |
++| `byte_limit` could be read as a cumulative budget | specified as a per-operation byte ceiling; repeated individually valid requests remain valid | deterministic semantic test + docs |
++| GPU quota could be read as utilization metering | specified as a per-operation demand ceiling; trusted scheduler/device accounting must supply and enforce actual demand | docs + integration contract |
++| SMP/concurrency model was implicit | engine is explicitly externally synchronized; authorization and privileged commitment must not race policy mutation | header + threat/integration docs |
++| Sanitizers were reported but not rerun by the packaged gate | `make phase11-crosscheck` now executes ASan/UBSan and GCC `-fanalyzer` directly | cross-check script |
++
++No change in this pass claims cryptographic capability integrity, IOMMU/GPU hardware isolation, cumulative quota accounting, distributed revocation convergence, or tamper-proof audit persistence.
+diff --git a/README.md b/README.md
+index 7946778..46f28bb 100644
+--- a/README.md
++++ b/README.md
+@@ -25,6 +25,7 @@ The current version is a bootable research skeleton. It does **not** yet run rea
+ - tensor registry
+ - work-graph representation
+ - capability objects
++- Phase 11.1 deny-by-default policy engine with attenuation, revocation, audit, and slot reclamation
+ - simple priority/dependency scheduler
+ - demonstration graph created during kernel boot
+ 
+@@ -148,6 +149,7 @@ The first serious experiments should compare an AI-native primitive with a conve
+ 4. topology-aware placement simulation
+ 5. zero-copy shared tensor handles
+ 6. capability-based agent resource access
++7. policy/resource locking and authorization-to-commit experiments
+ 
+ Do **not** attempt GPU-driver development first. Prove one architectural advantage before expanding hardware support.
+ 
+diff --git a/README_PHASE11.md b/README_PHASE11.md
+new file mode 100644
+index 0000000..d5e5417
+--- /dev/null
++++ b/README_PHASE11.md
+@@ -0,0 +1,32 @@
++# Nexora Phase 11.1 Package
++
++This package is the corrected Phase 11 security/policy reference implementation for Nexora. It is self-contained for host testing and can also be compiled into the original Nexora/AIKernel starter tree.
++
++The Phase 11.1 hardening pass adds strict effect validation, rejects wildcard sentinels as concrete request IDs, reclaims inactive grant slots safely, makes management-operation trust semantics explicit, documents external synchronization/TOCTOU requirements, and turns sanitizer/static-analysis checks into part of the reproducible phase gate.
++
++Primary files:
++
++```text
++PHASE11.md
++PHASE11_1_CORRECTIONS.md
++include/ai/policy.h
++include/ai/policy_demo.h
++src/ai/policy.c
++src/ai/policy_demo.c
++tests/phase11_policy_test.c
++tests/phase11_property_test.c
++docs/PHASE11_SECURITY_MODEL.md
++docs/PHASE11_THREAT_MODEL.md
++docs/PHASE11_VALIDATION.md
++docs/PHASE11_INTEGRATION.md
++spec/POLICY_SEMANTICS.md
++scripts/phase11_crosscheck.sh
++```
++
++Run the complete phase gate:
++
++```bash
++make phase11-crosscheck
++```
++
++The gate reruns host tests, ASan/UBSan, GCC static analysis, the freestanding compile, a clean full kernel link, dependency/regression checks, and package checksum verification. GRUB/QEMU checks remain conditional on local tooling availability.
+diff --git a/docs/PHASE11_INTEGRATION.md b/docs/PHASE11_INTEGRATION.md
+new file mode 100644
+index 0000000..fdfc15e
+--- /dev/null
++++ b/docs/PHASE11_INTEGRATION.md
+@@ -0,0 +1,118 @@
++# Integrating Phase 11.1 into the Phase 10 Tree
++
++Phase 11.1 is intentionally narrow. The core depends only on:
++
++```text
++include/kernel/types.h
++include/ai/capability.h
++```
++
++Required files:
++
++```text
++include/ai/policy.h
++src/ai/policy.c
++```
++
++Optional kernel demonstration:
++
++```text
++include/ai/policy_demo.h
++src/ai/policy_demo.c
++```
++
++## Build integration
++
++Add `src/ai/policy.c` to the kernel C source list. The demo source is optional.
++
++## Mapping Phase 10 capability domains
++
++Typical Phase 10 declarations map as follows:
++
++```text
++agent A: tensor X read
++  subject_id        = A
++  resource_kind     = TENSOR
++  resource_id       = X
++  rights            = AI_CAP_TENSOR_READ
++
++agent A: model M execute
++  resource_kind     = MODEL
++  resource_id       = M
++  rights            = AI_CAP_MODEL_USE | AI_CAP_EXECUTE
++
++agent A: GPU 0 <= 20% demand
++  resource_kind     = DEVICE
++  resource_id       = 0
++  rights            = AI_CAP_GPU_USE
++  device_quota_bps  = 2000
++
++agent B: network destination whitelist
++  one ALLOW grant per destination, or a broad wildcard allow plus explicit DENY rules
++```
++
++`AI_POLICY_ANY_ID` is reserved for grant/delegation wildcard scope. Never allocate it as a real resource identifier and never submit it in a concrete request.
++
++## Enforcement rule
++
++Do not merely attach grants to an agent object. Privileged resource paths must call the policy engine immediately before the operation.
++
++Bad:
++
++```text
++agent.has_gpu_capability == true -> execute
++```
++
++Required conceptually:
++
++```text
++lock(policy_and_resource_state)
++construct kernel-derived request
++result = ai_policy_authorize(engine, request)
++if !result.allowed:
++    unlock
++    reject
++commit/reserve privileged resource operation
++unlock
++execute committed operation
++```
++
++Equivalent generation/epoch revalidation can be used instead of one coarse lock, but the authorization decision must not become stale before commitment.
++
++## Trusted inputs
++
++The following should be kernel-derived or independently validated, not copied blindly from user payloads:
++
++- subject ID;
++- concrete resource ID;
++- requested rights;
++- operation byte count;
++- accelerator-demand estimate/reservation;
++- authorization timestamp.
++
++The current `byte_limit` and `device_quota_bps` are **per-operation ceilings**. They do not maintain cumulative consumption. A scheduler/accounting layer must separately enforce cumulative resource budgets if required.
++
++## Management operations
++
++`ai_policy_revoke()` and `ai_policy_bump_epoch()` assume their caller is already trusted and authorized. `actor_subject_id` is only written into the audit event.
++
++Therefore expose them only behind an authenticated kernel/control-plane management path, for example:
++
++```text
++if !management_authorized(caller): reject
++ai_policy_revoke(...)
++```
++
++Do not export these raw functions directly as unprivileged syscalls.
++
++## SMP/concurrency
++
++The policy engine has no internal locking. Every integration must define an external synchronization rule covering:
++
++- grant creation/delegation;
++- authorization scans;
++- revoke/epoch mutation;
++- inactive-slot reclamation;
++- the authorization-to-resource-commit interval.
++
++Active grants are not relocated by reclamation. Nevertheless, callers should use stable grant IDs rather than retaining raw pointers across policy mutations, especially after a grant is revoked.
+diff --git a/docs/PHASE11_SECURITY_MODEL.md b/docs/PHASE11_SECURITY_MODEL.md
+new file mode 100644
+index 0000000..1026d9e
+--- /dev/null
++++ b/docs/PHASE11_SECURITY_MODEL.md
+@@ -0,0 +1,196 @@
++# Nexora Phase 11.1 — Policy Enforcement Security Model
++
++## Objective
++
++Phase 10 introduced per-agent capability domains. Phase 11 turned those declarations into a deterministic policy core. Phase 11.1 hardens that core around malformed effects, wildcard-sentinel misuse, grant lifecycle/reclamation, management-call trust, and concurrency assumptions.
++
++The principal rule remains **deny by default**. An operation is authorized only when at least one active allow grant covers the complete request and no active explicit-deny grant overlaps any requested right.
++
++## Security objects
++
++A grant is modeled as:
++
++```text
++g = (
++  id, parent,
++  subject, issuer,
++  effect,
++  resource_kind, resource_id,
++  rights,
++  not_before, expires_at,
++  byte_limit,
++  device_quota_bps,
++  delegation_depth, max_delegation_depth,
++  epoch, active
++)
++```
++
++A request is:
++
++```text
++r = (
++  subject,
++  resource_kind, resource_id,
++  rights,
++  now,
++  bytes,
++  device_quota_bps
++)
++```
++
++`device_quota_bps` is expressed in basis points: 10,000 = 100%, 2,000 = 20%.
++
++`AI_POLICY_ANY_ID` is reserved for policy wildcard grants/delegations. It is **not** a valid concrete request object identifier. Real resource allocators must therefore never assign the sentinel value as an object ID.
++
++## Quantitative semantics
++
++The current `byte_limit` and `device_quota_bps` fields are **per-operation admission ceilings**:
++
++```text
++r.bytes <= g.byte_limit                  when g.byte_limit != 0
++r.device_quota_bps <= g.device_quota_bps
++```
++
++They are not cumulative lifetime budgets and they do not measure actual accelerator utilization. A caller that submits a false low demand can defeat the intended quantitative policy. Enforcement points must derive these values from trusted kernel/scheduler state.
++
++Cumulative byte budgets, token buckets, wall-clock GPU accounting, and scheduler-enforced reservation consumption belong in later enforcement/accounting work.
++
++## Authorization semantics
++
++For request `r`, a grant `g` is a candidate when:
++
++1. `g.subject == r.subject`;
++2. `g.resource_kind == r.resource_kind` or `g.resource_kind == ANY`;
++3. `g.resource_id == r.resource_id` or `g.resource_id == ANY_ID`;
++4. `g.active == true`;
++5. `g.epoch == current_epoch`;
++6. `g.not_before <= r.now`;
++7. `g.expires_at == 0` or `r.now < g.expires_at`.
++
++A request is malformed and denied when it has zero rights, uses resource kind `ANY`, uses `AI_POLICY_ANY_ID` as a concrete object ID, uses an invalid resource kind, or requests quota above 10,000 basis points.
++
++An explicit deny candidate blocks the request if its rights overlap any requested right.
++
++An allow candidate authorizes only if:
++
++```text
++r.rights ⊆ g.rights
++r.bytes <= g.byte_limit        when g.byte_limit != 0
++r.device_quota_bps <= g.device_quota_bps
++```
++
++No partial-rights composition occurs across multiple allow grants. One grant must cover the whole request.
++
++## Grant well-formedness
++
++A root grant is accepted only when:
++
++- `effect` is exactly `ALLOW` or `DENY`;
++- rights are nonzero;
++- resource encoding is valid;
++- time window is valid;
++- quota is in `(0, 10000]`.
++
++`ai_policy_validate()` independently checks effect validity so memory corruption or direct struct mutation cannot silently pass the invariant gate.
++
++## Delegation attenuation
++
++A delegated grant must be no more powerful than its parent. Child `c` must satisfy:
++
++```text
++c.rights ⊆ p.rights
++resource(c) ⊆ resource(p)
++time_window(c) ⊆ time_window(p)
++byte_limit(c) <= byte_limit(p)          if p is bounded
++quota(c) <= quota(p)
++depth(c) = depth(p) + 1 <= max_depth(p)
++epoch(c) = epoch(p)
++issuer(c) = subject(p)
++```
++
++Wildcard resources can be narrowed to exact resources; exact resources cannot be widened to wildcards.
++
++## Revocation and grant-slot lifecycle
++
++Targeted revocation is cascading. Revoking a parent grant revokes every active descendant, preserving the invariant that an active delegated grant never depends on an inactive parent.
++
++Inactive grants are tombstones until reclaimed. `ai_policy_reclaim_inactive()` converts inactive slots into reusable holes without moving active grants. Allocation can trigger reclamation when storage is otherwise full. This avoids permanent exhaustion from historical revoked entries while preserving active-grant pointer stability.
++
++An epoch bump is a global revocation barrier. Every existing grant is marked inactive, stale slots are reclaimed, then the epoch advances. New grants are issued only in the new epoch.
++
++Pointers returned by grant-creation APIs are not ownership handles. A pointer to an inactive/reclaimed grant may cease to describe the historical grant; callers should retain grant IDs when they need stable identity.
++
++## Management-operation trust contract
++
++`ai_policy_revoke()` and `ai_policy_bump_epoch()` are **trusted kernel-management primitives**. Their `actor_subject_id` argument is audit attribution, not an authorization check.
++
++Therefore a syscall, control-plane command, or agent-facing API must authenticate/authorize management authority **before** invoking either primitive. Direct exposure to an untrusted caller would be a security error.
++
++## Concurrency and TOCTOU contract
++
++`ai_policy_engine` has no internal lock or atomic protocol. SMP integration must serialize reads/mutations externally.
++
++For privileged operations, a mere pattern of:
++
++```text
++authorize();
++unlock();
++execute_resource_operation();
++```
++
++can race revocation or an epoch transition. Integration must either hold a suitable policy/resource lock through authorization and commitment, or revalidate a policy generation/epoch immediately before the irreversible privileged action.
++
++## Audit trail
++
++Every authorization decision, delegation attempt, revocation, and epoch bump is written to a fixed-size ring buffer with:
++
++- monotonic audit sequence;
++- action type;
++- subject/actor attribution;
++- resource;
++- rights;
++- decision;
++- reason code;
++- matched grant;
++- policy epoch.
++
++The ring is in-memory and overwrites old entries after capacity is reached. Persistence, cryptographic sealing, and remote attestation are later phases.
++
++## Executable invariants
++
++`ai_policy_validate()` checks occupied grant slots for:
++
++1. unique nonzero IDs;
++2. effect in `{ALLOW, DENY}`;
++3. nonzero rights;
++4. valid wildcard/resource encoding;
++5. well-formed time windows;
++6. quotas in `(0, 10000]`;
++7. bounded delegation depth;
++8. existing parent grants for delegated entries;
++9. allow-only delegation chains;
++10. no active child with inactive parent;
++11. issuer identity preservation;
++12. no rights amplification;
++13. no resource widening;
++14. no time widening;
++15. no byte-ceiling widening;
++16. no quota widening;
++17. parent/child epoch equality.
++
++Free/reclaimed slots (`id == 0`, inactive) are ignored.
++
++## Non-goals in Phase 11.1
++
++This phase does **not** claim:
++
++- cryptographic unforgeability of in-memory kernel structs;
++- secure boot or measured boot;
++- trusted execution environments;
++- persisted tamper-proof audit logs;
++- side-channel resistance;
++- hardware-enforced GPU isolation;
++- cumulative byte or accelerator accounting;
++- verified device drivers;
++- distributed identity/revocation consistency;
++- theorem-proved kernel correctness.
+diff --git a/docs/PHASE11_THREAT_MODEL.md b/docs/PHASE11_THREAT_MODEL.md
+new file mode 100644
+index 0000000..280ddc9
+--- /dev/null
++++ b/docs/PHASE11_THREAT_MODEL.md
+@@ -0,0 +1,99 @@
++# Phase 11.1 Threat Model
++
++## Assets
++
++The policy layer protects logical authority over tensors, models, accelerator devices, network endpoints, remote tensors, and collective operations.
++
++Protected dimensions include operation rights, resource identity, time window, per-operation byte demand, per-operation accelerator demand, delegation depth, and revocation epoch.
++
++## Adversary model
++
++An untrusted agent or user-mode workload may submit arbitrary requests and attempt to:
++
++1. access an ungranted resource;
++2. request rights not granted;
++3. exceed per-operation byte or device-quota ceilings;
++4. reuse an expired or revoked grant;
++5. delegate additional rights;
++6. widen exact resource scope to a wildcard;
++7. submit `AI_POLICY_ANY_ID` as if it were a concrete resource;
++8. extend delegated lifetime or quantitative ceilings;
++9. bypass a deny rule with a separate allow rule;
++10. retain descendant authority after parent revocation;
++11. exhaust the grant table with historical revoked entries;
++12. exploit malformed/unknown policy-effect values.
++
++The policy engine is designed to reject or safely handle these cases under its trust assumptions.
++
++## Trusted computing base
++
++Phase 11.1 trusts:
++
++- kernel memory integrity;
++- the policy-engine implementation;
++- authenticated management wrappers around revoke/epoch operations;
++- external synchronization around the policy engine on concurrent/SMP systems;
++- correct subject/resource identity supplied by enforcement points;
++- the time source supplied to authorization;
++- trusted derivation of per-operation byte and accelerator demand;
++- correct coupling between an authorization result and the privileged operation that follows it.
++
++If an attacker can overwrite kernel memory, forge kernel-side identities, invoke management primitives without an authorized wrapper, race authorization against resource commitment, or lie about demand/accounting inputs, this logical policy layer alone does not provide security.
++
++## Security properties
++
++### P1 — Default denial
++
++No matching complete allow grant implies denial.
++
++### P2 — Explicit-deny precedence
++
++A matching active deny that overlaps any requested right blocks the request even when an allow also matches.
++
++### P3 — Complete-rights coverage
++
++One allow grant must contain every requested right. Rights are not unioned across grants.
++
++### P4 — Request validity
++
++Wildcard sentinels and invalid resource/effect encodings cannot be used as valid concrete requests/grants.
++
++### P5 — Per-operation constraint monotonicity
++
++Authorization never permits a declared byte or accelerator demand above the matching grant ceiling. This is admission checking, not cumulative metering.
++
++### P6 — Delegation attenuation
++
++Delegation can only preserve or reduce authority.
++
++### P7 — Revocation closure
++
++Revoking a grant revokes every descendant grant.
++
++### P8 — Epoch invalidation
++
++A global epoch transition invalidates all existing grants and releases their storage for reuse.
++
++### P9 — Storage recovery
++
++Inactive historical grants cannot permanently consume all grant slots; inactive slots are reclaimable without moving active grants.
++
++### P10 — Decision observability
++
++Every policy decision generates an audit record with an explicit reason/action attribution.
++
++## Residual risks
++
++Important risks intentionally deferred or delegated to integration:
++
++- authorization-to-execution TOCTOU unless the caller follows the synchronization contract;
++- DMA isolation and IOMMU enforcement;
++- side channels across shared accelerators;
++- cumulative bandwidth/byte accounting;
++- real GPU utilization measurement and reservation enforcement;
++- network endpoint authenticity;
++- cryptographic identity of remote resources;
++- distributed revocation convergence;
++- audit persistence, anti-rollback, and overflow archival;
++- denial of service through **active** grant-table exhaustion;
++- starvation/DoS through repeated expensive policy calls.
+diff --git a/docs/PHASE11_VALIDATION.md b/docs/PHASE11_VALIDATION.md
+new file mode 100644
+index 0000000..97a1642
+--- /dev/null
++++ b/docs/PHASE11_VALIDATION.md
+@@ -0,0 +1,85 @@
++# Phase 11.1 Validation Plan
++
++Run the complete gate:
++
++```bash
++make phase11-crosscheck
++```
++
++The script is the release gate; it reruns the checks below rather than relying on previously reported results.
++
++## Gate A — Deterministic + property host tests
++
++```bash
++make phase11-test
++```
++
++Deterministic coverage includes:
++
++- deny by default;
++- exact subject/resource matching;
++- rights isolation;
++- expiry;
++- per-request byte ceilings;
++- repeated requests demonstrating non-cumulative byte semantics;
++- device-demand ceilings;
++- explicit deny precedence;
++- successful delegation attenuation;
++- rights/resource/lifetime/byte widening rejection;
++- cascading revocation;
++- invalid policy-effect rejection and invariant detection;
++- rejection of `AI_POLICY_ANY_ID` as a concrete request object;
++- explicit inactive-slot reclamation;
++- full-table pressure followed by revoked-slot reuse;
++- epoch invalidation plus complete stale-slot reuse;
++- invariant validation;
++- ordered audit retrieval.
++
++`tests/phase11_property_test.c` independently generates 5,000 randomized delegation attempts and compares acceptance against a separately stated attenuation predicate. Every accepted child is rechecked for rights/resource/time/byte/quota monotonicity and passed through `ai_policy_validate()`.
++
++The property test also forces more than 256 audit writes and verifies strict logical sequence order after ring-buffer wraparound.
++
++## Gate B — Sanitizers
++
++```bash
++make phase11-sanitize
++```
++
++Both host suites are compiled and executed with AddressSanitizer and UndefinedBehaviorSanitizer.
++
++## Gate C — Static analysis
++
++The cross-check compiles `src/ai/policy.c` using GCC `-fanalyzer` under `-Werror`.
++
++## Gate D — Freestanding compile
++
++`src/ai/policy.c` must compile with the kernel freestanding flags and no libc dependency.
++
++## Gate E — Clean kernel link
++
++The phase gate removes previous build output and links the full x86-64 kernel ELF with the policy module and demo.
++
++## Gate F — Dependency/source regression checks
++
++The linked ELF is checked for common unexpected libc references. Source checks confirm that Phase 11.1 hardening hooks are present: effect invariant, wildcard-request validation, reclamation API, management trust contract, synchronization contract, and per-request byte semantics.
++
++## Gate G — Release checksums
++
++`sha256sum -c SHA256SUMS` must pass for every release file listed in the package checksum manifest.
++
++## Gate H — Multiboot/QEMU
++
++When GRUB tooling is available, the kernel ELF is checked with `grub-file`. QEMU/GRUB ISO tooling is reported separately because an interactive boot is environment-dependent.
++
++When QEMU + GRUB are available locally:
++
++```bash
++make
++make run
++```
++
++Expected serial decisions include tensor read allow, tensor write deny, GPU demand above ceiling deny, GPU demand below ceiling allow, attenuated delegation allow, privilege amplification deny, delegated authority after parent revocation deny, and invariant validation pass.
++
++## Phase 10 enforcement-point validation
++
++Phase 10 privileged paths should call `ai_policy_authorize()` immediately before tensor/model/device/network/remote/collective commitments using kernel-derived identity and demand fields. On SMP systems, the policy and resource state must be synchronized so revoke/epoch mutation cannot race the authorized commitment.
+diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md
+index e14c541..e2e2480 100644
+--- a/docs/ROADMAP.md
++++ b/docs/ROADMAP.md
+@@ -177,3 +177,32 @@ agent B:
+ ```
+ 
+ The security model should be measurable and formally specified before being trusted.
++
++## Milestone 11 — Formal policy enforcement and security validation (11.1 hardened)
++
++Turn the Phase 10 agent capability model into an enforceable security core.
++
++Implement:
++
++- typed resource identities
++- deny-by-default policy evaluation
++- explicit-deny precedence
++- time/per-request-byte/per-request-device-demand constraints
++- non-amplifying capability delegation
++- cascading revocation
++- global policy epochs
++- ordered audit events
++- strict effect/sentinel validation
++- reclaimable inactive grant slots
++- explicit management trust + external synchronization contract
++- executable structural invariants
++- adversarial host tests
++
++Exit criteria:
++
++- privilege amplification attempts are rejected
++- wildcard/resource widening is rejected
++- quantitative limits are enforced
++- parent revocation invalidates descendants
++- policy invariants pass
++- every decision has an auditable reason code
+diff --git a/include/ai/policy.h b/include/ai/policy.h
+new file mode 100644
+index 0000000..8d45f42
+--- /dev/null
++++ b/include/ai/policy.h
+@@ -0,0 +1,228 @@
++#ifndef NEXORA_AI_POLICY_H
++#define NEXORA_AI_POLICY_H
++
++#include <kernel/types.h>
++#include <ai/capability.h>
++
++#define AI_POLICY_MAX_GRANTS       128u
++#define AI_POLICY_AUDIT_CAPACITY   256u
++#define AI_POLICY_ANY_ID           (~0ull)
++#define AI_POLICY_QUOTA_FULL_BPS   10000u
++
++typedef enum {
++    AI_RESOURCE_ANY = 0,
++    AI_RESOURCE_TENSOR,
++    AI_RESOURCE_MODEL,
++    AI_RESOURCE_DEVICE,
++    AI_RESOURCE_NETWORK_ENDPOINT,
++    AI_RESOURCE_REMOTE_TENSOR,
++    AI_RESOURCE_COLLECTIVE
++} ai_resource_kind;
++
++typedef enum {
++    AI_POLICY_EFFECT_ALLOW = 0,
++    AI_POLICY_EFFECT_DENY
++} ai_policy_effect;
++
++typedef enum {
++    AI_POLICY_REASON_ALLOWED = 0,
++    AI_POLICY_REASON_DENY_EXPLICIT,
++    AI_POLICY_REASON_DENY_NO_MATCH,
++    AI_POLICY_REASON_DENY_RIGHTS,
++    AI_POLICY_REASON_DENY_NOT_YET_VALID,
++    AI_POLICY_REASON_DENY_EXPIRED,
++    AI_POLICY_REASON_DENY_BYTE_LIMIT,
++    AI_POLICY_REASON_DENY_QUOTA,
++    AI_POLICY_REASON_DENY_REVOKED,
++    AI_POLICY_REASON_DENY_EPOCH,
++    AI_POLICY_REASON_DENY_DELEGATION,
++    AI_POLICY_REASON_DENY_INVALID_REQUEST,
++    AI_POLICY_REASON_DENY_TABLE_FULL
++} ai_policy_reason;
++
++typedef enum {
++    AI_AUDIT_AUTHORIZE = 0,
++    AI_AUDIT_DELEGATE,
++    AI_AUDIT_REVOKE,
++    AI_AUDIT_EPOCH_BUMP
++} ai_audit_action;
++
++typedef enum {
++    AI_POLICY_INVARIANT_OK = 0,
++    AI_POLICY_INVARIANT_BAD_ID,
++    AI_POLICY_INVARIANT_DUPLICATE_ID,
++    AI_POLICY_INVARIANT_BAD_EFFECT,
++    AI_POLICY_INVARIANT_ZERO_RIGHTS,
++    AI_POLICY_INVARIANT_BAD_RESOURCE,
++    AI_POLICY_INVARIANT_BAD_TIME_WINDOW,
++    AI_POLICY_INVARIANT_BAD_QUOTA,
++    AI_POLICY_INVARIANT_BAD_DEPTH,
++    AI_POLICY_INVARIANT_PARENT_MISSING,
++    AI_POLICY_INVARIANT_PARENT_NOT_ALLOW,
++    AI_POLICY_INVARIANT_PARENT_INACTIVE,
++    AI_POLICY_INVARIANT_ISSUER_MISMATCH,
++    AI_POLICY_INVARIANT_RIGHTS_AMPLIFIED,
++    AI_POLICY_INVARIANT_RESOURCE_WIDENED,
++    AI_POLICY_INVARIANT_TIME_WIDENED,
++    AI_POLICY_INVARIANT_BYTES_WIDENED,
++    AI_POLICY_INVARIANT_QUOTA_WIDENED,
++    AI_POLICY_INVARIANT_EPOCH_MISMATCH
++} ai_policy_invariant_error;
++
++typedef struct {
++    u64 subject_id;
++    u64 issuer_id;
++    ai_policy_effect effect;
++    ai_resource_kind resource_kind;
++    u64 resource_id;
++    u64 rights;
++    u64 not_before_ns;
++    u64 expires_at_ns;
++    /* Per-request byte ceiling. Zero means unbounded; this is not cumulative accounting. */
++    u64 byte_limit;
++    /* Per-request accelerator demand ceiling in basis points. */
++    u32 device_quota_bps;
++    u16 max_delegation_depth;
++} ai_policy_grant_spec;
++
++typedef struct {
++    u64 id;
++    u64 parent_id;
++    u64 subject_id;
++    u64 issuer_id;
++    ai_policy_effect effect;
++    ai_resource_kind resource_kind;
++    u64 resource_id;
++    u64 rights;
++    u64 not_before_ns;
++    u64 expires_at_ns;
++    u64 byte_limit;
++    u32 device_quota_bps;
++    u16 delegation_depth;
++    u16 max_delegation_depth;
++    u64 epoch;
++    bool active;
++} ai_policy_grant;
++
++typedef struct {
++    u64 subject_id;
++    ai_resource_kind resource_kind;
++    /* AI_POLICY_ANY_ID is reserved for policy wildcards and is invalid in a request. */
++    u64 resource_id;
++    u64 rights;
++    u64 now_ns;
++    /* Bytes demanded by this operation, not accumulated lifetime consumption. */
++    u64 bytes;
++    /* Accelerator share demanded by this operation; callers must provide trusted accounting. */
++    u32 device_quota_bps;
++} ai_policy_request;
++
++typedef struct {
++    u64 child_subject_id;
++    ai_resource_kind resource_kind;
++    u64 resource_id;
++    u64 rights;
++    u64 not_before_ns;
++    u64 expires_at_ns;
++    u64 byte_limit;
++    u32 device_quota_bps;
++} ai_policy_delegation;
++
++typedef struct {
++    bool allowed;
++    ai_policy_reason reason;
++    u64 matched_grant_id;
++} ai_policy_result;
++
++typedef struct {
++    bool valid;
++    ai_policy_invariant_error error;
++    u64 grant_id;
++} ai_policy_validation;
++
++typedef struct {
++    u64 sequence;
++    ai_audit_action action;
++    u64 subject_id;
++    ai_resource_kind resource_kind;
++    u64 resource_id;
++    u64 rights;
++    u64 matched_grant_id;
++    u64 epoch;
++    bool allowed;
++    ai_policy_reason reason;
++} ai_policy_audit_entry;
++
++typedef struct {
++    ai_policy_grant grants[AI_POLICY_MAX_GRANTS];
++    u32 grant_count;
++    u64 next_grant_id;
++    u64 epoch;
++
++    ai_policy_audit_entry audit[AI_POLICY_AUDIT_CAPACITY];
++    u32 audit_next;
++    u32 audit_count;
++    u64 audit_sequence;
++} ai_policy_engine;
++
++/*
++ * Synchronization contract
++ * ------------------------
++ * ai_policy_engine is deliberately lock-free and contains no internal SMP
++ * synchronization. Kernel integration must serialize access externally.
++ * A privileged operation must not race authorization against revoke/epoch
++ * mutation; hold the policy/resource lock across authorization and resource
++ * commitment, or revalidate before committing the privileged operation.
++ */
++void ai_policy_init(ai_policy_engine *engine);
++
++ai_policy_grant *ai_policy_add_grant(
++    ai_policy_engine *engine,
++    const ai_policy_grant_spec *spec
++);
++
++ai_policy_result ai_policy_authorize(
++    ai_policy_engine *engine,
++    const ai_policy_request *request
++);
++
++ai_policy_result ai_policy_delegate(
++    ai_policy_engine *engine,
++    u64 parent_grant_id,
++    u64 delegator_subject_id,
++    u64 now_ns,
++    const ai_policy_delegation *delegation
++);
++
++/*
++ * Management-operation trust contract
++ * -----------------------------------
++ * ai_policy_revoke() and ai_policy_bump_epoch() are kernel-management
++ * primitives. actor_subject_id is audit attribution, not an authorization
++ * check. Do not expose these functions directly to untrusted callers; a
++ * syscall/control-plane wrapper must authenticate and authorize management
++ * authority before calling them.
++ */
++bool ai_policy_revoke(ai_policy_engine *engine, u64 grant_id, u64 actor_subject_id);
++u64 ai_policy_bump_epoch(ai_policy_engine *engine, u64 actor_subject_id);
++
++/* Remove inactive grants while preserving IDs and parent links of active grants. */
++u32 ai_policy_reclaim_inactive(ai_policy_engine *engine);
++
++const ai_policy_grant *ai_policy_find_grant(const ai_policy_engine *engine, u64 grant_id);
++ai_policy_validation ai_policy_validate(const ai_policy_engine *engine);
++
++u32 ai_policy_audit_count(const ai_policy_engine *engine);
++bool ai_policy_audit_get(
++    const ai_policy_engine *engine,
++    u32 logical_index,
++    ai_policy_audit_entry *out
++);
++
++const char *ai_policy_reason_name(ai_policy_reason reason);
++const char *ai_resource_kind_name(ai_resource_kind kind);
++const char *ai_policy_effect_name(ai_policy_effect effect);
++const char *ai_audit_action_name(ai_audit_action action);
++const char *ai_policy_invariant_name(ai_policy_invariant_error error);
++
++#endif
+diff --git a/include/ai/policy_demo.h b/include/ai/policy_demo.h
+new file mode 100644
+index 0000000..3523fbd
+--- /dev/null
++++ b/include/ai/policy_demo.h
+@@ -0,0 +1,6 @@
++#ifndef NEXORA_AI_POLICY_DEMO_H
++#define NEXORA_AI_POLICY_DEMO_H
++
++void ai_policy_run_phase11_demo(void);
++
++#endif
+diff --git a/include/kernel/types.h b/include/kernel/types.h
+index ef0b752..be52198 100644
+--- a/include/kernel/types.h
++++ b/include/kernel/types.h
+@@ -19,6 +19,8 @@ typedef enum {
+     true = 1
+ } bool;
+ 
++#ifndef NULL
+ #define NULL ((void*)0)
++#endif
+ 
+ #endif
+diff --git a/phase11_manifest.json b/phase11_manifest.json
+new file mode 100644
+index 0000000..3357033
+--- /dev/null
++++ b/phase11_manifest.json
+@@ -0,0 +1,41 @@
++{
++  "project": "Nexora",
++  "phase": "11.1",
++  "title": "Formal Security, Policy Enforcement, and Hardening Corrections",
++  "security_defaults": {
++    "default_decision": "deny",
++    "explicit_deny_precedence": true,
++    "grant_composition_for_rights": false,
++    "delegation": "attenuating-only",
++    "revocation": "cascading",
++    "global_epoch_revocation": true,
++    "inactive_slot_reclamation": true,
++    "wildcard_request_sentinel_rejected": true,
++    "management_operations": "trusted-kernel-wrapper-required",
++    "synchronization": "external",
++    "audit": "fixed-size ordered ring"
++  },
++  "resource_kinds": [
++    "tensor",
++    "model",
++    "device",
++    "network_endpoint",
++    "remote_tensor",
++    "collective"
++  ],
++  "constraints": [
++    "rights",
++    "time_window",
++    "per_request_byte_limit",
++    "per_request_device_quota_basis_points",
++    "delegation_depth",
++    "epoch"
++  ],
++  "explicit_non_goals": [
++    "cumulative_byte_accounting",
++    "actual_gpu_utilization_metering",
++    "hardware_gpu_isolation",
++    "cryptographic_capability_integrity",
++    "persistent_tamper_proof_audit"
++  ]
++}
+diff --git a/scripts/phase11_crosscheck.sh b/scripts/phase11_crosscheck.sh
+new file mode 100755
+index 0000000..020e210
+--- /dev/null
++++ b/scripts/phase11_crosscheck.sh
+@@ -0,0 +1,68 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
++cd "$ROOT"
++
++printf '%s\n' '[1/9] deterministic + property host tests'
++make phase11-test
++
++printf '%s\n' '[2/9] ASan + UBSan host tests'
++make phase11-sanitize
++
++printf '%s\n' '[3/9] GCC static analyzer'
++if gcc -std=c11 -O0 -Wall -Wextra -Werror -fanalyzer -Iinclude \
++       -c src/ai/policy.c -o build/policy_analyzer.o; then
++    echo 'gcc -fanalyzer: PASS'
++else
++    echo 'gcc -fanalyzer: FAIL'
++    exit 1
++fi
++
++printf '%s\n' '[4/9] freestanding policy compile'
++mkdir -p build/crosscheck
++gcc -std=c11 -O2 -Wall -Wextra -Werror \
++    -ffreestanding -fno-stack-protector -fno-pic -fno-pie \
++    -m64 -mno-red-zone -Iinclude \
++    -c src/ai/policy.c -o build/crosscheck/policy.o
++
++printf '%s\n' '[5/9] clean full kernel ELF link'
++make clean >/dev/null
++make build/kernel.elf
++
++printf '%s\n' '[6/9] dependency check'
++if nm -u build/kernel.elf | grep -E '(^| )((malloc|calloc|realloc|free|printf|puts|memcpy|memset|strcmp|strlen))$' >/dev/null; then
++    echo 'unexpected libc dependency in kernel'
++    exit 1
++fi
++
++printf '%s\n' '[7/9] Phase 11.1 regression-source checks'
++grep -q 'AI_POLICY_INVARIANT_BAD_EFFECT' include/ai/policy.h
++grep -q 'ai_policy_reclaim_inactive' include/ai/policy.h
++grep -q 'request_resource_valid' src/ai/policy.c
++grep -q 'Management-operation trust contract' include/ai/policy.h
++grep -q 'Synchronization contract' include/ai/policy.h
++grep -q 'Per-request byte ceiling' include/ai/policy.h
++grep -q 'AI_POLICY_ANY_ID is a policy wildcard sentinel' src/ai/policy.c
++
++printf '%s\n' '[8/9] packaged source checksum validation'
++if [[ -f SHA256SUMS ]]; then
++    sha256sum -c SHA256SUMS
++else
++    echo 'SHA256SUMS unavailable: SKIP while developing; required in release package'
++fi
++
++printf '%s\n' '[9/9] optional Multiboot2/QEMU tooling status'
++if command -v grub-file >/dev/null 2>&1; then
++    grub-file --is-x86-multiboot2 build/kernel.elf
++    echo 'multiboot2 header: PASS'
++else
++    echo 'grub-file unavailable: SKIP (kernel ELF link already passed)'
++fi
++if command -v qemu-system-x86_64 >/dev/null 2>&1 && command -v grub-mkrescue >/dev/null 2>&1; then
++    echo 'QEMU/GRUB tooling detected; interactive boot remains available via make run.'
++else
++    echo 'QEMU/GRUB ISO tooling incomplete: boot execution SKIP.'
++fi
++
++echo 'Phase 11.1 cross-check: PASS'
+diff --git a/spec/POLICY_SEMANTICS.md b/spec/POLICY_SEMANTICS.md
+new file mode 100644
+index 0000000..4581ef7
+--- /dev/null
++++ b/spec/POLICY_SEMANTICS.md
+@@ -0,0 +1,105 @@
++# Policy Semantics — Phase 11.1 Compact Specification
++
++Let `G` be the finite set of occupied grants and `E` the current epoch. `ANY_ID` is a policy wildcard sentinel and is outside the domain of concrete request object IDs.
++
++Well-formed request:
++
++```text
++valid_request(r) ≜
++  r.rights ≠ ∅ ∧
++  r.kind ∈ ConcreteResourceKinds ∧
++  r.object ≠ ANY_ID ∧
++  0 ≤ r.quota ≤ 10000
++```
++
++For grant `g` and request `r`:
++
++```text
++subject_match(g,r)  ≜ g.subject = r.subject
++kind_match(g,r)     ≜ g.kind = ANY ∨ g.kind = r.kind
++object_match(g,r)   ≜ g.object = ANY_ID ∨ g.object = r.object
++current(g)          ≜ g.active ∧ g.epoch = E
++live(g,r)           ≜ g.not_before ≤ r.now ∧
++                      (g.expires = 0 ∨ r.now < g.expires)
++base_match(g,r)     ≜ subject_match ∧ kind_match ∧ object_match ∧ current ∧ live
++rights_cover(g,r)   ≜ (g.rights ∩ r.rights) = r.rights
++bytes_cover(g,r)    ≜ g.byte_limit = 0 ∨ r.bytes ≤ g.byte_limit
++quota_cover(g,r)    ≜ r.quota ≤ g.quota
++```
++
++`bytes_cover` and `quota_cover` are per-operation admission predicates, not cumulative consumption accounting.
++
++Explicit denial:
++
++```text
++DeniedExplicit(r) ≜ ∃ g ∈ G :
++  base_match(g,r) ∧ g.effect = DENY ∧
++  (g.rights ∩ r.rights) ≠ ∅
++```
++
++Authorization:
++
++```text
++Authorized(r) ≜
++  valid_request(r) ∧
++  ¬DeniedExplicit(r) ∧
++  ∃ g ∈ G :
++    base_match(g,r) ∧
++    g.effect = ALLOW ∧
++    rights_cover(g,r) ∧
++    bytes_cover(g,r) ∧
++    quota_cover(g,r)
++```
++
++Root grant well-formedness requires:
++
++```text
++effect(g) ∈ {ALLOW, DENY}
++rights(g) ≠ ∅
++resource_encoding(g) valid
++time_window(g) valid
++0 < quota(g) ≤ 10000
++```
++
++Delegation defines an attenuation preorder `c ⪯ p`:
++
++```text
++rights(c) ⊆ rights(p)
++resource(c) ⊆ resource(p)
++time(c) ⊆ time(p)
++bytes(c) ≤ bytes(p)       for bounded parent
++quota(c) ≤ quota(p)
++depth(c) = depth(p)+1 ≤ max_depth(p)
++epoch(c) = epoch(p)
++issuer(c) = subject(p)
++```
++
++Required safety invariants:
++
++```text
++I1  Every occupied grant has a valid effect and encoding.
++I2  Active delegated grants have an active parent.
++I3  Every delegated grant satisfies c ⪯ p.
++I4  Authorization is false when no allow grant completely covers r.
++I5  Explicit deny dominates allow.
++I6  ANY_ID cannot be used as a concrete request object.
++I7  Revocation is closed over descendants.
++I8  Epoch bump leaves no pre-bump grant active and permits stale-slot reuse.
++I9  Reclamation never relocates active grants.
++I10 Every authorization/delegation/revocation/epoch action is auditable.
++```
++
++Management semantics:
++
++```text
++revoke(...) and bump_epoch(...) are trusted kernel-management primitives.
++actor_subject_id is audit attribution, not an authorization proof.
++```
++
++Concurrency semantics:
++
++```text
++The engine is externally synchronized.
++Authorization must remain valid through privileged resource commitment,
++or be revalidated before commitment.
++```
+diff --git a/src/ai/policy.c b/src/ai/policy.c
+new file mode 100644
+index 0000000..d2145d3
+--- /dev/null
++++ b/src/ai/policy.c
+@@ -0,0 +1,638 @@
++#include <ai/policy.h>
++
++static bool valid_resource_kind(ai_resource_kind kind) {
++    return kind >= AI_RESOURCE_ANY && kind <= AI_RESOURCE_COLLECTIVE;
++}
++
++static bool valid_effect(ai_policy_effect effect) {
++    return effect == AI_POLICY_EFFECT_ALLOW || effect == AI_POLICY_EFFECT_DENY;
++}
++
++static bool resource_spec_valid(ai_resource_kind kind, u64 resource_id) {
++    if (!valid_resource_kind(kind)) return false;
++    if (kind == AI_RESOURCE_ANY && resource_id != AI_POLICY_ANY_ID) return false;
++    return true;
++}
++
++static bool request_resource_valid(ai_resource_kind kind, u64 resource_id) {
++    if (!valid_resource_kind(kind) || kind == AI_RESOURCE_ANY) return false;
++    /* AI_POLICY_ANY_ID is a policy wildcard sentinel, never a concrete object ID. */
++    return resource_id != AI_POLICY_ANY_ID;
++}
++
++static bool resource_matches(
++    ai_resource_kind grant_kind,
++    u64 grant_id,
++    ai_resource_kind request_kind,
++    u64 request_id
++) {
++    if (grant_kind != AI_RESOURCE_ANY && grant_kind != request_kind) return false;
++    if (grant_id != AI_POLICY_ANY_ID && grant_id != request_id) return false;
++    return true;
++}
++
++static bool resource_narrows(
++    ai_resource_kind parent_kind,
++    u64 parent_id,
++    ai_resource_kind child_kind,
++    u64 child_id
++) {
++    if (!resource_spec_valid(parent_kind, parent_id) ||
++        !resource_spec_valid(child_kind, child_id)) {
++        return false;
++    }
++
++    if (parent_kind != AI_RESOURCE_ANY && child_kind != parent_kind) return false;
++    if (parent_kind == AI_RESOURCE_ANY && child_kind == AI_RESOURCE_ANY &&
++        child_id != AI_POLICY_ANY_ID) {
++        return false;
++    }
++
++    if (parent_id != AI_POLICY_ANY_ID && child_id != parent_id) return false;
++    if (parent_id != AI_POLICY_ANY_ID && child_id == AI_POLICY_ANY_ID) return false;
++    return true;
++}
++
++static bool time_active(const ai_policy_grant *grant, u64 now_ns) {
++    if (now_ns < grant->not_before_ns) return false;
++    if (grant->expires_at_ns != 0 && now_ns >= grant->expires_at_ns) return false;
++    return true;
++}
++
++static bool time_narrows(
++    const ai_policy_grant *parent,
++    u64 now_ns,
++    u64 child_not_before_ns,
++    u64 child_expires_at_ns
++) {
++    if (child_not_before_ns < now_ns) return false;
++    if (child_not_before_ns < parent->not_before_ns) return false;
++    if (child_expires_at_ns != 0 && child_expires_at_ns <= child_not_before_ns) return false;
++
++    if (parent->expires_at_ns != 0) {
++        if (child_expires_at_ns == 0) return false;
++        if (child_expires_at_ns > parent->expires_at_ns) return false;
++    }
++    return true;
++}
++
++static bool bytes_narrow(u64 parent_limit, u64 child_limit) {
++    if (parent_limit == 0) return true;
++    if (child_limit == 0) return false;
++    return child_limit <= parent_limit;
++}
++
++static void audit_record(
++    ai_policy_engine *engine,
++    ai_audit_action action,
++    u64 subject_id,
++    ai_resource_kind kind,
++    u64 resource_id,
++    u64 rights,
++    bool allowed,
++    ai_policy_reason reason,
++    u64 matched_grant_id
++) {
++    if (!engine) return;
++
++    ai_policy_audit_entry *entry = &engine->audit[engine->audit_next];
++    entry->sequence = ++engine->audit_sequence;
++    entry->action = action;
++    entry->subject_id = subject_id;
++    entry->resource_kind = kind;
++    entry->resource_id = resource_id;
++    entry->rights = rights;
++    entry->matched_grant_id = matched_grant_id;
++    entry->epoch = engine->epoch;
++    entry->allowed = allowed;
++    entry->reason = reason;
++
++    engine->audit_next = (engine->audit_next + 1u) % AI_POLICY_AUDIT_CAPACITY;
++    if (engine->audit_count < AI_POLICY_AUDIT_CAPACITY) {
++        engine->audit_count++;
++    }
++}
++
++static ai_policy_grant *find_grant_mut(ai_policy_engine *engine, u64 grant_id) {
++    if (!engine || grant_id == 0) return NULL;
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        if (engine->grants[i].id == grant_id) return &engine->grants[i];
++    }
++    return NULL;
++}
++
++const ai_policy_grant *ai_policy_find_grant(const ai_policy_engine *engine, u64 grant_id) {
++    if (!engine || grant_id == 0) return NULL;
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        if (engine->grants[i].id == grant_id) return &engine->grants[i];
++    }
++    return NULL;
++}
++
++u32 ai_policy_reclaim_inactive(ai_policy_engine *engine) {
++    if (!engine) return 0;
++
++    u32 removed = 0;
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        ai_policy_grant *g = &engine->grants[i];
++        if (g->id == 0 || g->active) continue;
++        /* Mark a reusable hole without relocating any active grant. */
++        g->id = 0;
++        g->parent_id = 0;
++        g->active = false;
++        removed++;
++    }
++
++    while (engine->grant_count > 0 &&
++           engine->grants[engine->grant_count - 1u].id == 0) {
++        engine->grant_count--;
++    }
++    return removed;
++}
++
++static ai_policy_grant *allocate_grant_slot(ai_policy_engine *engine) {
++    if (!engine) return NULL;
++
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        if (engine->grants[i].id == 0) return &engine->grants[i];
++    }
++
++    if (engine->grant_count < AI_POLICY_MAX_GRANTS) {
++        return &engine->grants[engine->grant_count++];
++    }
++
++    (void)ai_policy_reclaim_inactive(engine);
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        if (engine->grants[i].id == 0) return &engine->grants[i];
++    }
++
++    if (engine->grant_count < AI_POLICY_MAX_GRANTS) {
++        return &engine->grants[engine->grant_count++];
++    }
++    return NULL;
++}
++
++void ai_policy_init(ai_policy_engine *engine) {
++    if (!engine) return;
++    engine->grant_count = 0;
++    engine->next_grant_id = 1;
++    engine->epoch = 1;
++    engine->audit_next = 0;
++    engine->audit_count = 0;
++    engine->audit_sequence = 0;
++}
++
++ai_policy_grant *ai_policy_add_grant(
++    ai_policy_engine *engine,
++    const ai_policy_grant_spec *spec
++) {
++    if (!engine || !spec) return NULL;
++    if (!valid_effect(spec->effect)) return NULL;
++    if (spec->rights == 0) return NULL;
++    if (!resource_spec_valid(spec->resource_kind, spec->resource_id)) return NULL;
++    if (spec->expires_at_ns != 0 && spec->expires_at_ns <= spec->not_before_ns) return NULL;
++    if (spec->device_quota_bps == 0 || spec->device_quota_bps > AI_POLICY_QUOTA_FULL_BPS) return NULL;
++
++    ai_policy_grant *grant = allocate_grant_slot(engine);
++    if (!grant) return NULL;
++    grant->id = engine->next_grant_id++;
++    grant->parent_id = 0;
++    grant->subject_id = spec->subject_id;
++    grant->issuer_id = spec->issuer_id;
++    grant->effect = spec->effect;
++    grant->resource_kind = spec->resource_kind;
++    grant->resource_id = spec->resource_id;
++    grant->rights = spec->rights;
++    grant->not_before_ns = spec->not_before_ns;
++    grant->expires_at_ns = spec->expires_at_ns;
++    grant->byte_limit = spec->byte_limit;
++    grant->device_quota_bps = spec->device_quota_bps;
++    grant->delegation_depth = 0;
++    grant->max_delegation_depth = spec->max_delegation_depth;
++    grant->epoch = engine->epoch;
++    grant->active = true;
++    return grant;
++}
++
++static ai_policy_result result(bool allowed, ai_policy_reason reason, u64 grant_id) {
++    ai_policy_result r;
++    r.allowed = allowed;
++    r.reason = reason;
++    r.matched_grant_id = grant_id;
++    return r;
++}
++
++ai_policy_result ai_policy_authorize(
++    ai_policy_engine *engine,
++    const ai_policy_request *request
++) {
++    if (!engine || !request || request->rights == 0 ||
++        !request_resource_valid(request->resource_kind, request->resource_id) ||
++        request->device_quota_bps > AI_POLICY_QUOTA_FULL_BPS) {
++        ai_policy_result r = result(false, AI_POLICY_REASON_DENY_INVALID_REQUEST, 0);
++        if (engine && request) {
++            audit_record(engine, AI_AUDIT_AUTHORIZE, request->subject_id,
++                         request->resource_kind, request->resource_id,
++                         request->rights, false, r.reason, 0);
++        }
++        return r;
++    }
++
++    bool saw_resource = false;
++    bool saw_revoked = false;
++    bool saw_epoch = false;
++    bool saw_not_yet = false;
++    bool saw_expired = false;
++    bool saw_rights = false;
++    bool saw_bytes = false;
++    bool saw_quota = false;
++
++    /* Explicit deny has precedence over any allow. */
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        const ai_policy_grant *g = &engine->grants[i];
++        if (g->id == 0) continue;
++        if (g->subject_id != request->subject_id) continue;
++        if (!resource_matches(g->resource_kind, g->resource_id,
++                              request->resource_kind, request->resource_id)) continue;
++        if (g->effect != AI_POLICY_EFFECT_DENY) continue;
++        if (!g->active || g->epoch != engine->epoch || !time_active(g, request->now_ns)) continue;
++        if ((g->rights & request->rights) == 0) continue;
++
++        ai_policy_result r = result(false, AI_POLICY_REASON_DENY_EXPLICIT, g->id);
++        audit_record(engine, AI_AUDIT_AUTHORIZE, request->subject_id,
++                     request->resource_kind, request->resource_id,
++                     request->rights, false, r.reason, g->id);
++        return r;
++    }
++
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        const ai_policy_grant *g = &engine->grants[i];
++        if (g->id == 0) continue;
++        if (g->subject_id != request->subject_id) continue;
++        if (!resource_matches(g->resource_kind, g->resource_id,
++                              request->resource_kind, request->resource_id)) continue;
++
++        saw_resource = true;
++
++        if (!g->active) {
++            saw_revoked = true;
++            continue;
++        }
++        if (g->epoch != engine->epoch) {
++            saw_epoch = true;
++            continue;
++        }
++        if (request->now_ns < g->not_before_ns) {
++            saw_not_yet = true;
++            continue;
++        }
++        if (g->expires_at_ns != 0 && request->now_ns >= g->expires_at_ns) {
++            saw_expired = true;
++            continue;
++        }
++        if (g->effect != AI_POLICY_EFFECT_ALLOW) continue;
++        if ((g->rights & request->rights) != request->rights) {
++            saw_rights = true;
++            continue;
++        }
++        if (g->byte_limit != 0 && request->bytes > g->byte_limit) {
++            saw_bytes = true;
++            continue;
++        }
++        if (request->device_quota_bps > g->device_quota_bps) {
++            saw_quota = true;
++            continue;
++        }
++
++        ai_policy_result r = result(true, AI_POLICY_REASON_ALLOWED, g->id);
++        audit_record(engine, AI_AUDIT_AUTHORIZE, request->subject_id,
++                     request->resource_kind, request->resource_id,
++                     request->rights, true, r.reason, g->id);
++        return r;
++    }
++
++    ai_policy_reason reason = AI_POLICY_REASON_DENY_NO_MATCH;
++    if (saw_revoked) reason = AI_POLICY_REASON_DENY_REVOKED;
++    else if (saw_epoch) reason = AI_POLICY_REASON_DENY_EPOCH;
++    else if (saw_not_yet) reason = AI_POLICY_REASON_DENY_NOT_YET_VALID;
++    else if (saw_expired) reason = AI_POLICY_REASON_DENY_EXPIRED;
++    else if (saw_rights) reason = AI_POLICY_REASON_DENY_RIGHTS;
++    else if (saw_bytes) reason = AI_POLICY_REASON_DENY_BYTE_LIMIT;
++    else if (saw_quota) reason = AI_POLICY_REASON_DENY_QUOTA;
++    else if (!saw_resource) reason = AI_POLICY_REASON_DENY_NO_MATCH;
++
++    ai_policy_result r = result(false, reason, 0);
++    audit_record(engine, AI_AUDIT_AUTHORIZE, request->subject_id,
++                 request->resource_kind, request->resource_id,
++                 request->rights, false, r.reason, 0);
++    return r;
++}
++
++ai_policy_result ai_policy_delegate(
++    ai_policy_engine *engine,
++    u64 parent_grant_id,
++    u64 delegator_subject_id,
++    u64 now_ns,
++    const ai_policy_delegation *delegation
++) {
++    if (!engine || !delegation || delegation->rights == 0 ||
++        delegation->device_quota_bps == 0 ||
++        delegation->device_quota_bps > AI_POLICY_QUOTA_FULL_BPS) {
++        ai_policy_result r = result(false, AI_POLICY_REASON_DENY_INVALID_REQUEST, parent_grant_id);
++        if (engine && delegation) {
++            audit_record(engine, AI_AUDIT_DELEGATE, delegator_subject_id,
++                         delegation->resource_kind, delegation->resource_id,
++                         delegation->rights, false, r.reason, parent_grant_id);
++        }
++        return r;
++    }
++
++    ai_policy_grant *parent = find_grant_mut(engine, parent_grant_id);
++    if (!parent || parent->effect != AI_POLICY_EFFECT_ALLOW ||
++        parent->subject_id != delegator_subject_id || !parent->active ||
++        parent->epoch != engine->epoch || !time_active(parent, now_ns)) {
++        ai_policy_result r = result(false, AI_POLICY_REASON_DENY_DELEGATION, parent_grant_id);
++        audit_record(engine, AI_AUDIT_DELEGATE, delegator_subject_id,
++                     delegation->resource_kind, delegation->resource_id,
++                     delegation->rights, false, r.reason, parent_grant_id);
++        return r;
++    }
++
++    if (parent->delegation_depth >= parent->max_delegation_depth ||
++        (delegation->rights & parent->rights) != delegation->rights ||
++        !resource_narrows(parent->resource_kind, parent->resource_id,
++                          delegation->resource_kind, delegation->resource_id) ||
++        !time_narrows(parent, now_ns, delegation->not_before_ns,
++                      delegation->expires_at_ns) ||
++        !bytes_narrow(parent->byte_limit, delegation->byte_limit) ||
++        delegation->device_quota_bps > parent->device_quota_bps) {
++        ai_policy_result r = result(false, AI_POLICY_REASON_DENY_DELEGATION, parent_grant_id);
++        audit_record(engine, AI_AUDIT_DELEGATE, delegator_subject_id,
++                     delegation->resource_kind, delegation->resource_id,
++                     delegation->rights, false, r.reason, parent_grant_id);
++        return r;
++    }
++
++    ai_policy_grant *child = allocate_grant_slot(engine);
++    if (!child) {
++        ai_policy_result r = result(false, AI_POLICY_REASON_DENY_TABLE_FULL, parent_grant_id);
++        audit_record(engine, AI_AUDIT_DELEGATE, delegator_subject_id,
++                     delegation->resource_kind, delegation->resource_id,
++                     delegation->rights, false, r.reason, parent_grant_id);
++        return r;
++    }
++
++    child->id = engine->next_grant_id++;
++    child->parent_id = parent->id;
++    child->subject_id = delegation->child_subject_id;
++    child->issuer_id = parent->subject_id;
++    child->effect = AI_POLICY_EFFECT_ALLOW;
++    child->resource_kind = delegation->resource_kind;
++    child->resource_id = delegation->resource_id;
++    child->rights = delegation->rights;
++    child->not_before_ns = delegation->not_before_ns;
++    child->expires_at_ns = delegation->expires_at_ns;
++    child->byte_limit = delegation->byte_limit;
++    child->device_quota_bps = delegation->device_quota_bps;
++    child->delegation_depth = (u16)(parent->delegation_depth + 1u);
++    child->max_delegation_depth = parent->max_delegation_depth;
++    child->epoch = engine->epoch;
++    child->active = true;
++
++    ai_policy_result r = result(true, AI_POLICY_REASON_ALLOWED, child->id);
++    audit_record(engine, AI_AUDIT_DELEGATE, delegator_subject_id,
++                 delegation->resource_kind, delegation->resource_id,
++                 delegation->rights, true, r.reason, child->id);
++    return r;
++}
++
++static bool grant_parent_inactive(const ai_policy_engine *engine, const ai_policy_grant *grant) {
++    if (grant->id == 0 || !grant->active || grant->parent_id == 0) return false;
++    const ai_policy_grant *parent = ai_policy_find_grant(engine, grant->parent_id);
++    return !parent || !parent->active;
++}
++
++bool ai_policy_revoke(ai_policy_engine *engine, u64 grant_id, u64 actor_subject_id) {
++    ai_policy_grant *grant = find_grant_mut(engine, grant_id);
++    if (!grant || !grant->active) {
++        if (engine) {
++            audit_record(engine, AI_AUDIT_REVOKE, actor_subject_id,
++                         AI_RESOURCE_ANY, AI_POLICY_ANY_ID, 0,
++                         false, AI_POLICY_REASON_DENY_REVOKED, grant_id);
++        }
++        return false;
++    }
++
++    grant->active = false;
++
++    /* Cascading revocation preserves the no-orphaned-delegation invariant. */
++    bool changed = true;
++    while (changed) {
++        changed = false;
++        for (u32 i = 0; i < engine->grant_count; ++i) {
++            if (grant_parent_inactive(engine, &engine->grants[i])) {
++                engine->grants[i].active = false;
++                changed = true;
++            }
++        }
++    }
++
++    audit_record(engine, AI_AUDIT_REVOKE, actor_subject_id,
++                 grant->resource_kind, grant->resource_id, grant->rights,
++                 true, AI_POLICY_REASON_ALLOWED, grant_id);
++    return true;
++}
++
++u64 ai_policy_bump_epoch(ai_policy_engine *engine, u64 actor_subject_id) {
++    if (!engine) return 0;
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        engine->grants[i].active = false;
++    }
++    /* Epoch transition is a global invalidation barrier; stale slots are reclaimable. */
++    (void)ai_policy_reclaim_inactive(engine);
++    engine->epoch++;
++    if (engine->epoch == 0) engine->epoch = 1;
++
++    audit_record(engine, AI_AUDIT_EPOCH_BUMP, actor_subject_id,
++                 AI_RESOURCE_ANY, AI_POLICY_ANY_ID, 0,
++                 true, AI_POLICY_REASON_ALLOWED, 0);
++    return engine->epoch;
++}
++
++static ai_policy_validation validation(
++    bool valid,
++    ai_policy_invariant_error error,
++    u64 grant_id
++) {
++    ai_policy_validation v;
++    v.valid = valid;
++    v.error = error;
++    v.grant_id = grant_id;
++    return v;
++}
++
++ai_policy_validation ai_policy_validate(const ai_policy_engine *engine) {
++    if (!engine) return validation(false, AI_POLICY_INVARIANT_BAD_ID, 0);
++
++    for (u32 i = 0; i < engine->grant_count; ++i) {
++        const ai_policy_grant *g = &engine->grants[i];
++        if (g->id == 0) {
++            if (g->active) return validation(false, AI_POLICY_INVARIANT_BAD_ID, 0);
++            continue; /* reusable hole */
++        }
++        for (u32 j = i + 1; j < engine->grant_count; ++j) {
++            if (engine->grants[j].id != 0 && g->id == engine->grants[j].id) {
++                return validation(false, AI_POLICY_INVARIANT_DUPLICATE_ID, g->id);
++            }
++        }
++        if (!valid_effect(g->effect)) {
++            return validation(false, AI_POLICY_INVARIANT_BAD_EFFECT, g->id);
++        }
++        if (g->rights == 0) return validation(false, AI_POLICY_INVARIANT_ZERO_RIGHTS, g->id);
++        if (!resource_spec_valid(g->resource_kind, g->resource_id)) {
++            return validation(false, AI_POLICY_INVARIANT_BAD_RESOURCE, g->id);
++        }
++        if (g->expires_at_ns != 0 && g->expires_at_ns <= g->not_before_ns) {
++            return validation(false, AI_POLICY_INVARIANT_BAD_TIME_WINDOW, g->id);
++        }
++        if (g->device_quota_bps == 0 || g->device_quota_bps > AI_POLICY_QUOTA_FULL_BPS) {
++            return validation(false, AI_POLICY_INVARIANT_BAD_QUOTA, g->id);
++        }
++        if (g->delegation_depth > g->max_delegation_depth) {
++            return validation(false, AI_POLICY_INVARIANT_BAD_DEPTH, g->id);
++        }
++
++        if (g->parent_id == 0) continue;
++
++        const ai_policy_grant *p = ai_policy_find_grant(engine, g->parent_id);
++        if (!p) return validation(false, AI_POLICY_INVARIANT_PARENT_MISSING, g->id);
++        if (p->effect != AI_POLICY_EFFECT_ALLOW || g->effect != AI_POLICY_EFFECT_ALLOW) {
++            return validation(false, AI_POLICY_INVARIANT_PARENT_NOT_ALLOW, g->id);
++        }
++        if (g->active && !p->active) {
++            return validation(false, AI_POLICY_INVARIANT_PARENT_INACTIVE, g->id);
++        }
++        if (g->issuer_id != p->subject_id) {
++            return validation(false, AI_POLICY_INVARIANT_ISSUER_MISMATCH, g->id);
++        }
++        if ((g->rights & p->rights) != g->rights) {
++            return validation(false, AI_POLICY_INVARIANT_RIGHTS_AMPLIFIED, g->id);
++        }
++        if (!resource_narrows(p->resource_kind, p->resource_id,
++                              g->resource_kind, g->resource_id)) {
++            return validation(false, AI_POLICY_INVARIANT_RESOURCE_WIDENED, g->id);
++        }
++        if (g->not_before_ns < p->not_before_ns ||
++            (p->expires_at_ns != 0 &&
++             (g->expires_at_ns == 0 || g->expires_at_ns > p->expires_at_ns))) {
++            return validation(false, AI_POLICY_INVARIANT_TIME_WIDENED, g->id);
++        }
++        if (!bytes_narrow(p->byte_limit, g->byte_limit)) {
++            return validation(false, AI_POLICY_INVARIANT_BYTES_WIDENED, g->id);
++        }
++        if (g->device_quota_bps > p->device_quota_bps) {
++            return validation(false, AI_POLICY_INVARIANT_QUOTA_WIDENED, g->id);
++        }
++        if (g->delegation_depth != (u16)(p->delegation_depth + 1u) ||
++            g->max_delegation_depth != p->max_delegation_depth) {
++            return validation(false, AI_POLICY_INVARIANT_BAD_DEPTH, g->id);
++        }
++        if (g->epoch != p->epoch) {
++            return validation(false, AI_POLICY_INVARIANT_EPOCH_MISMATCH, g->id);
++        }
++    }
++
++    return validation(true, AI_POLICY_INVARIANT_OK, 0);
++}
++
++u32 ai_policy_audit_count(const ai_policy_engine *engine) {
++    return engine ? engine->audit_count : 0;
++}
++
++bool ai_policy_audit_get(
++    const ai_policy_engine *engine,
++    u32 logical_index,
++    ai_policy_audit_entry *out
++) {
++    if (!engine || !out || logical_index >= engine->audit_count) return false;
++    u32 oldest = (engine->audit_next + AI_POLICY_AUDIT_CAPACITY - engine->audit_count)
++                 % AI_POLICY_AUDIT_CAPACITY;
++    u32 index = (oldest + logical_index) % AI_POLICY_AUDIT_CAPACITY;
++    *out = engine->audit[index];
++    return true;
++}
++
++const char *ai_policy_reason_name(ai_policy_reason reason) {
++    switch (reason) {
++        case AI_POLICY_REASON_ALLOWED: return "ALLOWED";
++        case AI_POLICY_REASON_DENY_EXPLICIT: return "DENY_EXPLICIT";
++        case AI_POLICY_REASON_DENY_NO_MATCH: return "DENY_NO_MATCH";
++        case AI_POLICY_REASON_DENY_RIGHTS: return "DENY_RIGHTS";
++        case AI_POLICY_REASON_DENY_NOT_YET_VALID: return "DENY_NOT_YET_VALID";
++        case AI_POLICY_REASON_DENY_EXPIRED: return "DENY_EXPIRED";
++        case AI_POLICY_REASON_DENY_BYTE_LIMIT: return "DENY_BYTE_LIMIT";
++        case AI_POLICY_REASON_DENY_QUOTA: return "DENY_QUOTA";
++        case AI_POLICY_REASON_DENY_REVOKED: return "DENY_REVOKED";
++        case AI_POLICY_REASON_DENY_EPOCH: return "DENY_EPOCH";
++        case AI_POLICY_REASON_DENY_DELEGATION: return "DENY_DELEGATION";
++        case AI_POLICY_REASON_DENY_INVALID_REQUEST: return "DENY_INVALID_REQUEST";
++        case AI_POLICY_REASON_DENY_TABLE_FULL: return "DENY_TABLE_FULL";
++        default: return "UNKNOWN";
++    }
++}
++
++const char *ai_resource_kind_name(ai_resource_kind kind) {
++    switch (kind) {
++        case AI_RESOURCE_ANY: return "ANY";
++        case AI_RESOURCE_TENSOR: return "TENSOR";
++        case AI_RESOURCE_MODEL: return "MODEL";
++        case AI_RESOURCE_DEVICE: return "DEVICE";
++        case AI_RESOURCE_NETWORK_ENDPOINT: return "NETWORK_ENDPOINT";
++        case AI_RESOURCE_REMOTE_TENSOR: return "REMOTE_TENSOR";
++        case AI_RESOURCE_COLLECTIVE: return "COLLECTIVE";
++        default: return "UNKNOWN";
++    }
++}
++
++const char *ai_policy_effect_name(ai_policy_effect effect) {
++    switch (effect) {
++        case AI_POLICY_EFFECT_ALLOW: return "ALLOW";
++        case AI_POLICY_EFFECT_DENY: return "DENY";
++        default: return "UNKNOWN";
++    }
++}
++
++const char *ai_audit_action_name(ai_audit_action action) {
++    switch (action) {
++        case AI_AUDIT_AUTHORIZE: return "AUTHORIZE";
++        case AI_AUDIT_DELEGATE: return "DELEGATE";
++        case AI_AUDIT_REVOKE: return "REVOKE";
++        case AI_AUDIT_EPOCH_BUMP: return "EPOCH_BUMP";
++        default: return "UNKNOWN";
++    }
++}
++
++const char *ai_policy_invariant_name(ai_policy_invariant_error error) {
++    switch (error) {
++        case AI_POLICY_INVARIANT_OK: return "OK";
++        case AI_POLICY_INVARIANT_BAD_ID: return "BAD_ID";
++        case AI_POLICY_INVARIANT_DUPLICATE_ID: return "DUPLICATE_ID";
++        case AI_POLICY_INVARIANT_BAD_EFFECT: return "BAD_EFFECT";
++        case AI_POLICY_INVARIANT_ZERO_RIGHTS: return "ZERO_RIGHTS";
++        case AI_POLICY_INVARIANT_BAD_RESOURCE: return "BAD_RESOURCE";
++        case AI_POLICY_INVARIANT_BAD_TIME_WINDOW: return "BAD_TIME_WINDOW";
++        case AI_POLICY_INVARIANT_BAD_QUOTA: return "BAD_QUOTA";
++        case AI_POLICY_INVARIANT_BAD_DEPTH: return "BAD_DEPTH";
++        case AI_POLICY_INVARIANT_PARENT_MISSING: return "PARENT_MISSING";
++        case AI_POLICY_INVARIANT_PARENT_NOT_ALLOW: return "PARENT_NOT_ALLOW";
++        case AI_POLICY_INVARIANT_PARENT_INACTIVE: return "PARENT_INACTIVE";
++        case AI_POLICY_INVARIANT_ISSUER_MISMATCH: return "ISSUER_MISMATCH";
++        case AI_POLICY_INVARIANT_RIGHTS_AMPLIFIED: return "RIGHTS_AMPLIFIED";
++        case AI_POLICY_INVARIANT_RESOURCE_WIDENED: return "RESOURCE_WIDENED";
++        case AI_POLICY_INVARIANT_TIME_WIDENED: return "TIME_WIDENED";
++        case AI_POLICY_INVARIANT_BYTES_WIDENED: return "BYTES_WIDENED";
++        case AI_POLICY_INVARIANT_QUOTA_WIDENED: return "QUOTA_WIDENED";
++        case AI_POLICY_INVARIANT_EPOCH_MISMATCH: return "EPOCH_MISMATCH";
++        default: return "UNKNOWN";
++    }
++}
+diff --git a/src/ai/policy_demo.c b/src/ai/policy_demo.c
+new file mode 100644
+index 0000000..bb2e3c8
+--- /dev/null
++++ b/src/ai/policy_demo.c
+@@ -0,0 +1,115 @@
++#include <ai/policy.h>
++#include <ai/policy_demo.h>
++#include <kernel/printk.h>
++
++static ai_policy_engine phase11_engine;
++
++static void print_decision(const char *label, ai_policy_result r) {
++    kputs(label);
++    kputs(": ");
++    kputs(r.allowed ? "ALLOW" : "DENY");
++    kputs(" (");
++    kputs(ai_policy_reason_name(r.reason));
++    kputs(") grant=");
++    kprint_u64(r.matched_grant_id);
++    kputs("\n");
++}
++
++void ai_policy_run_phase11_demo(void) {
++    kputs("\n[Phase 11: verified policy enforcement demo]\n");
++    ai_policy_init(&phase11_engine);
++
++    ai_policy_grant_spec tensor_spec;
++    tensor_spec.subject_id = 42;
++    tensor_spec.issuer_id = 1;
++    tensor_spec.effect = AI_POLICY_EFFECT_ALLOW;
++    tensor_spec.resource_kind = AI_RESOURCE_TENSOR;
++    tensor_spec.resource_id = 100;
++    tensor_spec.rights = AI_CAP_TENSOR_READ;
++    tensor_spec.not_before_ns = 0;
++    tensor_spec.expires_at_ns = 1000000;
++    tensor_spec.byte_limit = 4096;
++    tensor_spec.device_quota_bps = AI_POLICY_QUOTA_FULL_BPS;
++    tensor_spec.max_delegation_depth = 2;
++    ai_policy_grant *tensor_grant = ai_policy_add_grant(&phase11_engine, &tensor_spec);
++
++    ai_policy_request req;
++    req.subject_id = 42;
++    req.resource_kind = AI_RESOURCE_TENSOR;
++    req.resource_id = 100;
++    req.rights = AI_CAP_TENSOR_READ;
++    req.now_ns = 100;
++    req.bytes = 1024;
++    req.device_quota_bps = 0;
++    print_decision("tensor 100 read", ai_policy_authorize(&phase11_engine, &req));
++
++    req.rights = AI_CAP_TENSOR_WRITE;
++    print_decision("tensor 100 write", ai_policy_authorize(&phase11_engine, &req));
++
++    ai_policy_grant_spec gpu_spec;
++    gpu_spec.subject_id = 42;
++    gpu_spec.issuer_id = 1;
++    gpu_spec.effect = AI_POLICY_EFFECT_ALLOW;
++    gpu_spec.resource_kind = AI_RESOURCE_DEVICE;
++    gpu_spec.resource_id = 0;
++    gpu_spec.rights = AI_CAP_GPU_USE;
++    gpu_spec.not_before_ns = 0;
++    gpu_spec.expires_at_ns = 0;
++    gpu_spec.byte_limit = 0;
++    gpu_spec.device_quota_bps = 2000;
++    gpu_spec.max_delegation_depth = 1;
++    ai_policy_add_grant(&phase11_engine, &gpu_spec);
++
++    req.subject_id = 42;
++    req.resource_kind = AI_RESOURCE_DEVICE;
++    req.resource_id = 0;
++    req.rights = AI_CAP_GPU_USE;
++    req.now_ns = 100;
++    req.bytes = 0;
++    req.device_quota_bps = 2500;
++    print_decision("GPU0 at 25%", ai_policy_authorize(&phase11_engine, &req));
++
++    req.device_quota_bps = 1500;
++    print_decision("GPU0 at 15%", ai_policy_authorize(&phase11_engine, &req));
++
++    if (tensor_grant) {
++        ai_policy_delegation d;
++        d.child_subject_id = 84;
++        d.resource_kind = AI_RESOURCE_TENSOR;
++        d.resource_id = 100;
++        d.rights = AI_CAP_TENSOR_READ;
++        d.not_before_ns = 100;
++        d.expires_at_ns = 500000;
++        d.byte_limit = 2048;
++        d.device_quota_bps = AI_POLICY_QUOTA_FULL_BPS;
++        ai_policy_result delegated = ai_policy_delegate(
++            &phase11_engine, tensor_grant->id, 42, 100, &d);
++        print_decision("delegate tensor read to agent 84", delegated);
++
++        d.rights = AI_CAP_TENSOR_READ | AI_CAP_TENSOR_WRITE;
++        print_decision("attempt privilege amplification",
++                       ai_policy_delegate(&phase11_engine, tensor_grant->id, 42, 100, &d));
++
++        ai_policy_revoke(&phase11_engine, tensor_grant->id, 1);
++        req.subject_id = 84;
++        req.resource_kind = AI_RESOURCE_TENSOR;
++        req.resource_id = 100;
++        req.rights = AI_CAP_TENSOR_READ;
++        req.now_ns = 200;
++        req.bytes = 512;
++        req.device_quota_bps = 0;
++        print_decision("delegated grant after parent revoke",
++                       ai_policy_authorize(&phase11_engine, &req));
++    }
++
++    ai_policy_validation v = ai_policy_validate(&phase11_engine);
++    kputs("policy invariants: ");
++    kputs(v.valid ? "PASS" : "FAIL");
++    kputs(" (");
++    kputs(ai_policy_invariant_name(v.error));
++    kputs(")\n");
++
++    kputs("audit entries: ");
++    kprint_u64(ai_policy_audit_count(&phase11_engine));
++    kputs("\n");
++}
+diff --git a/src/kernel/kmain.c b/src/kernel/kmain.c
+index 4ff7a8e..515c7b0 100644
+--- a/src/kernel/kmain.c
++++ b/src/kernel/kmain.c
+@@ -4,6 +4,7 @@
+ #include <ai/work.h>
+ #include <ai/scheduler.h>
+ #include <ai/capability.h>
++#include <ai/policy_demo.h>
+ 
+ static void print_tensor(const ai_tensor *t) {
+     kputs("tensor ");
+@@ -157,6 +158,7 @@ void kmain(void) {
+     kputs("AI runtime metadata initialized.\n");
+ 
+     run_demo();
++    ai_policy_run_phase11_demo();
+ 
+     kputs("\nAIKernel initialization complete.\n");
+     kputs("Halting CPU.\n");
+diff --git a/tests/phase11_policy_test.c b/tests/phase11_policy_test.c
+new file mode 100644
+index 0000000..251a85f
+--- /dev/null
++++ b/tests/phase11_policy_test.c
+@@ -0,0 +1,278 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <ai/policy.h>
++
++static unsigned tests_run = 0;
++
++#define CHECK(expr) do { \
++    ++tests_run; \
++    if (!(expr)) { \
++        fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #expr); \
++        exit(1); \
++    } \
++} while (0)
++
++static ai_policy_grant *add_allow(
++    ai_policy_engine *e,
++    u64 subject,
++    ai_resource_kind kind,
++    u64 object,
++    u64 rights,
++    u64 start,
++    u64 end,
++    u64 bytes,
++    u32 quota,
++    u16 depth
++) {
++    ai_policy_grant_spec s;
++    s.subject_id = subject;
++    s.issuer_id = 1;
++    s.effect = AI_POLICY_EFFECT_ALLOW;
++    s.resource_kind = kind;
++    s.resource_id = object;
++    s.rights = rights;
++    s.not_before_ns = start;
++    s.expires_at_ns = end;
++    s.byte_limit = bytes;
++    s.device_quota_bps = quota;
++    s.max_delegation_depth = depth;
++    return ai_policy_add_grant(e, &s);
++}
++
++static ai_policy_result auth(
++    ai_policy_engine *e,
++    u64 subject,
++    ai_resource_kind kind,
++    u64 object,
++    u64 rights,
++    u64 now,
++    u64 bytes,
++    u32 quota
++) {
++    ai_policy_request r;
++    r.subject_id = subject;
++    r.resource_kind = kind;
++    r.resource_id = object;
++    r.rights = rights;
++    r.now_ns = now;
++    r.bytes = bytes;
++    r.device_quota_bps = quota;
++    return ai_policy_authorize(e, &r);
++}
++
++static void test_invalid_effect_and_wildcard_request(void) {
++    ai_policy_engine e;
++    ai_policy_init(&e);
++
++    ai_policy_grant_spec s;
++    s.subject_id = 10;
++    s.issuer_id = 1;
++    s.effect = (ai_policy_effect)99;
++    s.resource_kind = AI_RESOURCE_TENSOR;
++    s.resource_id = 1;
++    s.rights = AI_CAP_TENSOR_READ;
++    s.not_before_ns = 0;
++    s.expires_at_ns = 0;
++    s.byte_limit = 0;
++    s.device_quota_bps = AI_POLICY_QUOTA_FULL_BPS;
++    s.max_delegation_depth = 0;
++    CHECK(ai_policy_add_grant(&e, &s) == NULL);
++
++    ai_policy_grant *g = add_allow(&e, 10, AI_RESOURCE_TENSOR, AI_POLICY_ANY_ID,
++                                    AI_CAP_TENSOR_READ, 0, 0, 0,
++                                    AI_POLICY_QUOTA_FULL_BPS, 0);
++    CHECK(g != NULL);
++    ai_policy_result r = auth(&e, 10, AI_RESOURCE_TENSOR, AI_POLICY_ANY_ID,
++                              AI_CAP_TENSOR_READ, 1, 1, 0);
++    CHECK(!r.allowed);
++    CHECK(r.reason == AI_POLICY_REASON_DENY_INVALID_REQUEST);
++
++    g->effect = (ai_policy_effect)99;
++    ai_policy_validation v = ai_policy_validate(&e);
++    CHECK(!v.valid);
++    CHECK(v.error == AI_POLICY_INVARIANT_BAD_EFFECT);
++    g->effect = AI_POLICY_EFFECT_ALLOW;
++    CHECK(ai_policy_validate(&e).valid);
++}
++
++static void test_table_reclamation(void) {
++    ai_policy_engine e;
++    ai_policy_init(&e);
++
++    u64 first_id = 0;
++    for (u32 i = 0; i < AI_POLICY_MAX_GRANTS; ++i) {
++        ai_policy_grant *g = add_allow(&e, 100 + i, AI_RESOURCE_MODEL, i,
++                                       AI_CAP_MODEL_USE, 0, 0, 0,
++                                       AI_POLICY_QUOTA_FULL_BPS, 0);
++        CHECK(g != NULL);
++        if (i == 0) first_id = g->id;
++    }
++    CHECK(e.grant_count == AI_POLICY_MAX_GRANTS);
++    CHECK(add_allow(&e, 9999, AI_RESOURCE_MODEL, 9999, AI_CAP_MODEL_USE,
++                    0, 0, 0, AI_POLICY_QUOTA_FULL_BPS, 0) == NULL);
++
++    /* Revoked slots are reclaimed automatically when the table is full. */
++    CHECK(ai_policy_revoke(&e, first_id, 1));
++    ai_policy_grant *replacement = add_allow(&e, 9999, AI_RESOURCE_MODEL, 9999,
++                                              AI_CAP_MODEL_USE, 0, 0, 0,
++                                              AI_POLICY_QUOTA_FULL_BPS, 0);
++    CHECK(replacement != NULL);
++    CHECK(e.grant_count == AI_POLICY_MAX_GRANTS);
++    CHECK(ai_policy_find_grant(&e, first_id) == NULL);
++    CHECK(ai_policy_validate(&e).valid);
++
++    /* Epoch invalidation immediately releases every stale slot. */
++    u64 old_epoch = e.epoch;
++    CHECK(ai_policy_bump_epoch(&e, 1) == old_epoch + 1);
++    CHECK(e.grant_count == 0);
++    CHECK(add_allow(&e, 7, AI_RESOURCE_MODEL, 7, AI_CAP_MODEL_USE,
++                    0, 0, 0, AI_POLICY_QUOTA_FULL_BPS, 0) != NULL);
++}
++
++int main(void) {
++    ai_policy_engine e;
++    ai_policy_init(&e);
++
++    /* 1. Deny by default. */
++    ai_policy_result r = auth(&e, 10, AI_RESOURCE_TENSOR, 1,
++                              AI_CAP_TENSOR_READ, 10, 64, 0);
++    CHECK(!r.allowed);
++    CHECK(r.reason == AI_POLICY_REASON_DENY_NO_MATCH);
++
++    /* 2. Exact allow and rights isolation. */
++    ai_policy_grant *tensor = add_allow(&e, 10, AI_RESOURCE_TENSOR, 1,
++                                        AI_CAP_TENSOR_READ, 0, 1000,
++                                        1024, AI_POLICY_QUOTA_FULL_BPS, 2);
++    CHECK(tensor != NULL);
++    u64 tensor_id = tensor->id;
++    CHECK(auth(&e, 10, AI_RESOURCE_TENSOR, 1,
++               AI_CAP_TENSOR_READ, 10, 512, 0).allowed);
++    CHECK(!auth(&e, 10, AI_RESOURCE_TENSOR, 1,
++                AI_CAP_TENSOR_WRITE, 10, 512, 0).allowed);
++    CHECK(!auth(&e, 11, AI_RESOURCE_TENSOR, 1,
++                AI_CAP_TENSOR_READ, 10, 512, 0).allowed);
++    CHECK(!auth(&e, 10, AI_RESOURCE_TENSOR, 2,
++                AI_CAP_TENSOR_READ, 10, 512, 0).allowed);
++
++    /* 3. Time and byte constraints. byte_limit is per request, not cumulative. */
++    CHECK(!auth(&e, 10, AI_RESOURCE_TENSOR, 1,
++                AI_CAP_TENSOR_READ, 1000, 512, 0).allowed);
++    CHECK(!auth(&e, 10, AI_RESOURCE_TENSOR, 1,
++                AI_CAP_TENSOR_READ, 10, 1025, 0).allowed);
++    CHECK(auth(&e, 10, AI_RESOURCE_TENSOR, 1,
++               AI_CAP_TENSOR_READ, 10, 1024, 0).allowed);
++    CHECK(auth(&e, 10, AI_RESOURCE_TENSOR, 1,
++               AI_CAP_TENSOR_READ, 11, 1024, 0).allowed);
++
++    /* 4. Device quota compares trusted per-operation demand, in basis points. */
++    ai_policy_grant *gpu = add_allow(&e, 10, AI_RESOURCE_DEVICE, 0,
++                                     AI_CAP_GPU_USE, 0, 0, 0, 2000, 1);
++    CHECK(gpu != NULL);
++    CHECK(auth(&e, 10, AI_RESOURCE_DEVICE, 0,
++               AI_CAP_GPU_USE, 10, 0, 1500).allowed);
++    r = auth(&e, 10, AI_RESOURCE_DEVICE, 0,
++             AI_CAP_GPU_USE, 10, 0, 2500);
++    CHECK(!r.allowed);
++    CHECK(r.reason == AI_POLICY_REASON_DENY_QUOTA);
++
++    /* 5. Explicit deny overrides allow. */
++    ai_policy_grant *network_allow = add_allow(&e, 10, AI_RESOURCE_NETWORK_ENDPOINT,
++                                               AI_POLICY_ANY_ID, AI_CAP_NETWORK,
++                                               0, 0, 0, AI_POLICY_QUOTA_FULL_BPS, 0);
++    CHECK(network_allow != NULL);
++    ai_policy_grant_spec deny;
++    deny.subject_id = 10;
++    deny.issuer_id = 1;
++    deny.effect = AI_POLICY_EFFECT_DENY;
++    deny.resource_kind = AI_RESOURCE_NETWORK_ENDPOINT;
++    deny.resource_id = 7;
++    deny.rights = AI_CAP_NETWORK;
++    deny.not_before_ns = 0;
++    deny.expires_at_ns = 0;
++    deny.byte_limit = 0;
++    deny.device_quota_bps = AI_POLICY_QUOTA_FULL_BPS;
++    deny.max_delegation_depth = 0;
++    CHECK(ai_policy_add_grant(&e, &deny) != NULL);
++    CHECK(auth(&e, 10, AI_RESOURCE_NETWORK_ENDPOINT, 8,
++               AI_CAP_NETWORK, 10, 0, 0).allowed);
++    r = auth(&e, 10, AI_RESOURCE_NETWORK_ENDPOINT, 7,
++             AI_CAP_NETWORK, 10, 0, 0);
++    CHECK(!r.allowed);
++    CHECK(r.reason == AI_POLICY_REASON_DENY_EXPLICIT);
++
++    /* 6. Delegation must attenuate rights, object, time, bytes and quota. */
++    ai_policy_delegation d;
++    d.child_subject_id = 20;
++    d.resource_kind = AI_RESOURCE_TENSOR;
++    d.resource_id = 1;
++    d.rights = AI_CAP_TENSOR_READ;
++    d.not_before_ns = 20;
++    d.expires_at_ns = 500;
++    d.byte_limit = 512;
++    d.device_quota_bps = AI_POLICY_QUOTA_FULL_BPS;
++    ai_policy_result dr = ai_policy_delegate(&e, tensor_id, 10, 20, &d);
++    CHECK(dr.allowed);
++    CHECK(dr.matched_grant_id != 0);
++    CHECK(auth(&e, 20, AI_RESOURCE_TENSOR, 1,
++               AI_CAP_TENSOR_READ, 30, 256, 0).allowed);
++
++    d.rights = AI_CAP_TENSOR_READ | AI_CAP_TENSOR_WRITE;
++    CHECK(!ai_policy_delegate(&e, tensor_id, 10, 20, &d).allowed);
++    d.rights = AI_CAP_TENSOR_READ;
++    d.resource_id = AI_POLICY_ANY_ID;
++    CHECK(!ai_policy_delegate(&e, tensor_id, 10, 20, &d).allowed);
++    d.resource_id = 1;
++    d.expires_at_ns = 2000;
++    CHECK(!ai_policy_delegate(&e, tensor_id, 10, 20, &d).allowed);
++    d.expires_at_ns = 500;
++    d.byte_limit = 2048;
++    CHECK(!ai_policy_delegate(&e, tensor_id, 10, 20, &d).allowed);
++
++    /* 7. Revocation cascades to descendants; explicit reclaim removes stale slots. */
++    CHECK(ai_policy_revoke(&e, tensor_id, 1));
++    r = auth(&e, 20, AI_RESOURCE_TENSOR, 1,
++             AI_CAP_TENSOR_READ, 30, 128, 0);
++    CHECK(!r.allowed);
++    CHECK(r.reason == AI_POLICY_REASON_DENY_REVOKED);
++    u32 before_reclaim = e.grant_count;
++    CHECK(ai_policy_reclaim_inactive(&e) >= 2);
++    CHECK(e.grant_count < before_reclaim);
++    CHECK(ai_policy_find_grant(&e, tensor_id) == NULL);
++
++    /* 8. Epoch bump invalidates and reclaims all pre-bump grants. */
++    CHECK(auth(&e, 10, AI_RESOURCE_DEVICE, 0,
++               AI_CAP_GPU_USE, 10, 0, 1000).allowed);
++    u64 old_epoch = e.epoch;
++    CHECK(ai_policy_bump_epoch(&e, 1) == old_epoch + 1);
++    CHECK(e.grant_count == 0);
++    r = auth(&e, 10, AI_RESOURCE_DEVICE, 0,
++             AI_CAP_GPU_USE, 10, 0, 1000);
++    CHECK(!r.allowed);
++    CHECK(r.reason == AI_POLICY_REASON_DENY_NO_MATCH);
++
++    /* 9. New epoch grants work; invariants stay valid. */
++    CHECK(add_allow(&e, 30, AI_RESOURCE_MODEL, 9,
++                    AI_CAP_MODEL_USE | AI_CAP_EXECUTE,
++                    0, 0, 0, AI_POLICY_QUOTA_FULL_BPS, 1) != NULL);
++    CHECK(auth(&e, 30, AI_RESOURCE_MODEL, 9,
++               AI_CAP_MODEL_USE, 1, 0, 0).allowed);
++    ai_policy_validation v = ai_policy_validate(&e);
++    CHECK(v.valid);
++    CHECK(v.error == AI_POLICY_INVARIANT_OK);
++
++    /* 10. Audit is ordered and nonempty. */
++    u32 n = ai_policy_audit_count(&e);
++    CHECK(n >= 10);
++    ai_policy_audit_entry first;
++    ai_policy_audit_entry last;
++    CHECK(ai_policy_audit_get(&e, 0, &first));
++    CHECK(ai_policy_audit_get(&e, n - 1u, &last));
++    CHECK(last.sequence >= first.sequence);
++
++    test_invalid_effect_and_wildcard_request();
++    test_table_reclamation();
++
++    printf("Phase 11.1 policy tests: PASS (%u checks, %u audit entries in primary engine)\n",
++           tests_run, n);
++    return 0;
++}
+diff --git a/tests/phase11_property_test.c b/tests/phase11_property_test.c
+new file mode 100644
+index 0000000..d0fd18f
+--- /dev/null
++++ b/tests/phase11_property_test.c
+@@ -0,0 +1,117 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <ai/policy.h>
++
++static u64 rng_state = 0x9E3779B97F4A7C15ull;
++
++static u64 next_rand(void) {
++    u64 x = rng_state;
++    x ^= x >> 12;
++    x ^= x << 25;
++    x ^= x >> 27;
++    rng_state = x;
++    return x * 2685821657736338717ull;
++}
++
++static void fail(unsigned iter, const char *msg) {
++    fprintf(stderr, "property FAIL at iteration %u: %s\n", iter, msg);
++    exit(1);
++}
++
++int main(void) {
++    const u64 now = 100;
++
++    for (unsigned i = 0; i < 5000; ++i) {
++        ai_policy_engine e;
++        ai_policy_init(&e);
++
++        ai_policy_grant_spec p;
++        p.subject_id = 100;
++        p.issuer_id = 1;
++        p.effect = AI_POLICY_EFFECT_ALLOW;
++        p.resource_kind = AI_RESOURCE_TENSOR;
++        p.resource_id = 55;
++        p.rights = AI_CAP_TENSOR_READ | AI_CAP_TENSOR_WRITE;
++        p.not_before_ns = 0;
++        p.expires_at_ns = 10000;
++        p.byte_limit = 4096;
++        p.device_quota_bps = AI_POLICY_QUOTA_FULL_BPS;
++        p.max_delegation_depth = 2;
++        ai_policy_grant *parent = ai_policy_add_grant(&e, &p);
++        if (!parent) fail(i, "parent grant creation");
++
++        u64 rights_choices[] = {
++            AI_CAP_TENSOR_READ,
++            AI_CAP_TENSOR_WRITE,
++            AI_CAP_TENSOR_READ | AI_CAP_TENSOR_WRITE,
++            AI_CAP_TENSOR_READ | AI_CAP_GPU_USE,
++            AI_CAP_GPU_USE
++        };
++
++        ai_policy_delegation d;
++        d.child_subject_id = 200 + (next_rand() % 7);
++        d.resource_kind = (next_rand() & 1u) ? AI_RESOURCE_TENSOR : AI_RESOURCE_MODEL;
++        d.resource_id = (next_rand() & 1u) ? 55 : AI_POLICY_ANY_ID;
++        d.rights = rights_choices[next_rand() % 5];
++        d.not_before_ns = next_rand() % 250;
++        d.expires_at_ns = 50 + (next_rand() % 12000);
++        d.byte_limit = next_rand() % 6000;
++        d.device_quota_bps = 1 + (u32)(next_rand() % 12000);
++
++        bool expected = true;
++        expected = expected && ((d.rights & p.rights) == d.rights);
++        expected = expected && d.resource_kind == AI_RESOURCE_TENSOR;
++        expected = expected && d.resource_id == 55;
++        expected = expected && d.not_before_ns >= now;
++        expected = expected && d.expires_at_ns > d.not_before_ns;
++        expected = expected && d.expires_at_ns <= p.expires_at_ns;
++        expected = expected && d.byte_limit > 0 && d.byte_limit <= p.byte_limit;
++        expected = expected && d.device_quota_bps <= p.device_quota_bps;
++
++        ai_policy_result r = ai_policy_delegate(&e, parent->id, 100, now, &d);
++        if (r.allowed != expected) fail(i, "delegation acceptance differs from attenuation model");
++
++        if (r.allowed) {
++            const ai_policy_grant *child = ai_policy_find_grant(&e, r.matched_grant_id);
++            if (!child) fail(i, "accepted child missing");
++            if ((child->rights & parent->rights) != child->rights) fail(i, "rights amplification");
++            if (child->resource_kind != AI_RESOURCE_TENSOR || child->resource_id != 55) fail(i, "resource widening");
++            if (child->not_before_ns < now || child->expires_at_ns > parent->expires_at_ns) fail(i, "time widening");
++            if (child->byte_limit == 0 || child->byte_limit > parent->byte_limit) fail(i, "byte widening");
++            if (child->device_quota_bps > parent->device_quota_bps) fail(i, "quota widening");
++            ai_policy_validation v = ai_policy_validate(&e);
++            if (!v.valid) fail(i, "invariant validator rejected accepted state");
++        }
++    }
++
++    /* Force the audit ring to wrap and verify logical order remains monotonic. */
++    ai_policy_engine e;
++    ai_policy_init(&e);
++    for (unsigned i = 0; i < 400; ++i) {
++        ai_policy_request r;
++        r.subject_id = 999;
++        r.resource_kind = AI_RESOURCE_TENSOR;
++        r.resource_id = i;
++        r.rights = AI_CAP_TENSOR_READ;
++        r.now_ns = i;
++        r.bytes = 1;
++        r.device_quota_bps = 0;
++        (void)ai_policy_authorize(&e, &r);
++    }
++
++    if (ai_policy_audit_count(&e) != AI_POLICY_AUDIT_CAPACITY) {
++        fail(5000, "audit ring count after wrap");
++    }
++
++    ai_policy_audit_entry prev;
++    ai_policy_audit_entry cur;
++    if (!ai_policy_audit_get(&e, 0, &prev)) fail(5000, "first audit read");
++    for (u32 i = 1; i < ai_policy_audit_count(&e); ++i) {
++        if (!ai_policy_audit_get(&e, i, &cur)) fail(5000, "audit read");
++        if (cur.sequence != prev.sequence + 1u) fail(5000, "audit order after wrap");
++        prev = cur;
++    }
++
++    printf("Phase 11.1 property tests: PASS (5000 attenuation trials + audit wrap)\n");
++    return 0;
++}

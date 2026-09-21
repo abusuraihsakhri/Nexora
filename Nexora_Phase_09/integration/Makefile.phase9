@@ -1,0 +1,6 @@
+# Add this source to the kernel C_SOURCES list.
+PHASE9_C_SOURCES := src/ai/distributed.c
+
+# Host-only validation target example:
+# gcc -std=c11 -O2 -Wall -Wextra -Werror -Iinclude \
+#     tests/phase9_host_test.c src/ai/distributed.c -o build/phase9_host_test

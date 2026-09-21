@@ -1,0 +1,35 @@
+Nexora Phase 3 Step 6 verification
+===================================
+
+Host test command:
+
+    make test
+
+Verified results:
+
+    tensor metadata tests: PASS
+    tensor backing tests: PASS
+    ownership/refcount tests: PASS
+    tensor lifetime tests: PASS
+    producer/consumer graph tests: PASS
+
+Freestanding kernel build command:
+
+    make build/kernel.elf
+
+Verified result:
+
+    Built build/kernel.elf
+
+File inspection:
+
+    ELF 64-bit LSB executable, x86-64, statically linked
+
+Compilation retains the project warning/error policy:
+
+    -std=c11 -O2 -Wall -Wextra -Werror
+    -ffreestanding -fno-stack-protector -fno-pic -fno-pie
+    -m64 -mno-red-zone
+
+GRUB/QEMU verification was not run in the build environment because grub-file,
+grub-mkrescue, and qemu-system-x86_64 are not installed there.
