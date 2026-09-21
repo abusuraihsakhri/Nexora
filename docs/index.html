@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexora OS — Security Remediation & Kernel Architecture</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --heading: #f0f6fc;
+      --accent: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-red: #f85149;
+      --accent-purple: #bc8cff;
+      --accent-yellow: #d29922;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      padding-bottom: 60px;
+    }
+    header {
+      background: #010409;
+      border-bottom: 1px solid var(--border);
+      padding: 24px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #1f6feb, #8957e5);
+      color: #fff;
+      font-weight: 700;
+      font-size: 18px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      letter-spacing: 1px;
+    }
+    h1 { color: var(--heading); font-size: 22px; font-weight: 600; }
+    nav { display: flex; gap: 16px; }
+    nav a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: background 0.2s, color 0.2s;
+    }
+    nav a:hover, nav a.active {
+      background: var(--card-bg);
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+    .hero {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+    .hero h2 { color: var(--heading); font-size: 24px; margin-bottom: 12px; }
+    .hero p { color: #8b949e; font-size: 15px; margin-bottom: 20px; }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .metric-card {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .metric-title { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .metric-val { font-size: 28px; font-weight: 700; color: var(--heading); margin-top: 6px; }
+    .metric-tag { font-size: 13px; color: var(--accent-green); margin-top: 4px; display: block; font-weight: 500; }
+    .section-title {
+      font-size: 20px;
+      color: var(--heading);
+      margin: 36px 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title::before {
+      content: "";
+      width: 4px;
+      height: 20px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+    }
+    .phase-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 140px;
+      gap: 16px;
+      align-items: center;
+      padding: 14px 18px;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .phase-badge {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .phase-desc { color: var(--text); }
+    .phase-status {
+      text-align: right;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .status-done { color: var(--accent-green); }
+    .status-wired { color: var(--accent-purple); }
+    .status-stand { color: var(--accent-yellow); }
+    .diagram-box {
+      background: #090d13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: #8b949e;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+    .diagram-box span.hi { color: var(--accent); }
+    .diagram-box span.green { color: var(--accent-green); }
+    .diagram-box span.purple { color: var(--accent-purple); }
+    .diagram-box span.red { color: var(--accent-red); }
+    footer {
+      text-align: center;
+      color: #484f58;
+      font-size: 13px;
+      margin-top: 48px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo-badge">NX</div>
+      <div>
+        <h1>Nexora Kernel Architecture & Remediation</h1>
+      </div>
+    </div>
+    <nav>
+      <a href="index.html" class="active">Overview</a>
+      <a href="findings.html">Security Findings (7/7)</a>
+      <a href="boot-sim.html">Boot Simulation</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="hero">
+      <h2>Audited & Hardened x86-64 Operating System</h2>
+      <p>Independent multi-phase architectural analysis, OWASP 2025 security vulnerability remediation, and kernel unification progress for the Nexora system.</p>
+      <div class="metrics">
+        <div class="metric-card">
+          <div class="metric-title">Security Vulnerabilities</div>
+          <div class="metric-val">7 / 7</div>
+          <span class="metric-tag">100% Remediated & Verified</span>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Kernel Phase Trees</div>
+          <div class="metric-val">17</div>
+          <span class="metric-tag">Phases 01 to 17</span>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Unification Order</div>
+          <div class="metric-val">M1 — M6</div>
+          <span class="metric-tag">Ring 0 + Ring 3 + AI Primitives</span>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Commit Attribution</div>
+          <div class="metric-val" style="font-size: 15px; margin-top: 12px; font-family: var(--mono); color: var(--accent);">abusuraihsakhri</div>
+          <span class="metric-tag" style="color: #8b949e;">Sole Author (No AI Trailers)</span>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="section-title">Architecture: Isolated Phases vs. Unified Kernel</h3>
+    <div class="card">
+      <p style="margin-bottom: 16px; font-size: 14px; color: #8b949e;">Prior to unification, the repository contained independent subtrees. The core convergence wires Phase 5 (GDT, TSS, IDT, Syscall ABI, ELF64 Loader, Process Isolation) with Phase 14 (AI Tensor Engine, Work Graph DAG, Scheduler) into a unified kernel binary.</p>
+      <pre class="diagram-box">
++---------------------------------------------------------------------------------------------------+
+|                                   <span class="hi">NEXORA KERNEL UNIFICATION</span>                                       |
++---------------------------------------------------------------------------------------------------+
+|  <span class="purple">[Phase 05: Privilege & Userspace]</span>                    <span class="green">[Phase 14: AI Engine Subsystems]</span>            |
+|  - GDT64 / TSS (rsp0 stack)                          - Bump / Frame Allocator (M1)                |
+|  - SYSCALL / SYSRET (%gs per-CPU stack)              - Slab Object Cache (M2)                     |
+|  - ELF64 Loader (W^X & Overlap Protection)           - ai_tensor (Safe Creation & Accounting)     |
+|  - Exception Fixup (.fixup_table on #PF)             - ai_work_graph & Async Queue (M6)           |
+|  - Process Isolation & Cap Delegation Boundary       - Capability Access Control                  |
++---------------------------------------------------+-----------------------------------------------+
+                                                    |
+                                                    v
++---------------------------------------------------------------------------------------------------+
+|                                  <span class="hi">UNIFIED BOOT & EXECUTION PATH</span>                                    |
+|  1. Multiboot2 -> 2. Buddy Frame Alloc -> 3. GDT/TSS/IDT Setup -> 4. Per-CPU %gs Base Initialized  |
+|  5. Slab Heap Ready -> 6. Load Userspace ELF64 -> 7. sysretq/iretq -> 8. Ring 3 Userspace Runtime  |
++---------------------------------------------------------------------------------------------------+</pre>
+    </div>
+
+    <h3 class="section-title">Primary Phase Evolution</h3>
+    <div class="card">
+      <div class="timeline">
+        <div class="phase-row">
+          <span class="phase-badge">Phase 01–04</span>
+          <span class="phase-desc">Early bootstrap, Multiboot headers, serial console, long mode transition.</span>
+          <span class="phase-status status-done">Foundation</span>
+        </div>
+        <div class="phase-row" style="border-left: 3px solid var(--accent);">
+          <span class="phase-badge">Phase 05</span>
+          <span class="phase-desc">GDT, 64-bit Syscall MSRs, Ring 3 entry, ELF64 loader, process table, capability delegation.</span>
+          <span class="phase-status status-wired">Remediated</span>
+        </div>
+        <div class="phase-row">
+          <span class="phase-badge">Phase 06–13</span>
+          <span class="phase-desc">Memory management explorations, IPC prototypes, device drivers, reliability metrics.</span>
+          <span class="phase-status status-stand">Reference</span>
+        </div>
+        <div class="phase-row" style="border-left: 3px solid var(--accent-green);">
+          <span class="phase-badge">Phase 14</span>
+          <span class="phase-desc">AI native kernel: tensor engine, work graphs, deterministic scheduler, capability tokens.</span>
+          <span class="phase-status status-wired">Remediated</span>
+        </div>
+        <div class="phase-row" style="border-left: 3px solid var(--accent-purple);">
+          <span class="phase-badge">Phase 17</span>
+          <span class="phase-desc">Observability, lockless ring tracing, health watchdog, automated release gating.</span>
+          <span class="phase-status status-wired">Remediated</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Nexora OS Security & Architecture &bull; Authored by abusuraihsakhri &bull; 2026
+  </footer>
+</body>
+</html>

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexora OS — Kernel Boot & Transition Simulation</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --heading: #f0f6fc;
+      --accent: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-red: #f85149;
+      --accent-purple: #bc8cff;
+      --accent-yellow: #d29922;
+      --mono: "SFMono-Regular", Consolas, Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      padding-bottom: 60px;
+    }
+    header {
+      background: #010409;
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .logo-badge {
+      background: linear-gradient(135deg, #1f6feb, #8957e5);
+      color: #fff;
+      font-weight: 700;
+      font-size: 16px;
+      padding: 6px 12px;
+      border-radius: 8px;
+    }
+    h1 { color: var(--heading); font-size: 20px; font-weight: 600; }
+    nav { display: flex; gap: 14px; }
+    nav a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 6px;
+    }
+    nav a:hover, nav a.active {
+      background: var(--card-bg);
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+    .sim-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+    }
+    @media (max-width: 900px) {
+      .sim-grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+    }
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background: #21262d;
+      color: var(--heading);
+      border: 1px solid var(--border);
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:hover { background: #30363d; }
+    .btn-primary { background: #238636; border-color: rgba(240,246,252,0.1); color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .stages-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .stage-item {
+      padding: 12px 16px;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
+    .stage-item.active {
+      border-color: var(--accent);
+      background: #1f6feb15;
+    }
+    .stage-item.completed {
+      border-color: var(--accent-green);
+      opacity: 0.85;
+    }
+    .stage-name { font-weight: 600; color: var(--heading); font-size: 14px; }
+    .stage-badge {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #21262d;
+      color: #8b949e;
+    }
+    .stage-item.active .stage-badge { background: var(--accent); color: #fff; }
+    .stage-item.completed .stage-badge { background: var(--accent-green); color: #fff; }
+    .log-window {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      height: 220px;
+      overflow-y: auto;
+      color: #8b949e;
+      line-height: 1.5;
+    }
+    .log-line { margin-bottom: 4px; }
+    .log-line.info { color: #58a6ff; }
+    .log-line.success { color: #3fb950; }
+    .log-line.ring3 { color: #bc8cff; }
+    .reg-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    .reg-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .reg-name { color: #8b949e; font-weight: 600; width: 40%; }
+    .reg-val { color: var(--accent); font-weight: 700; text-align: right; }
+    .cpl-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 12px;
+      margin-top: 14px;
+      text-align: center;
+      width: 100%;
+    }
+    .cpl-0 { background: #f8514922; color: var(--accent-red); border: 1px solid #f8514944; }
+    .cpl-3 { background: #3fb95022; color: var(--accent-green); border: 1px solid #3fb95044; }
+    footer { text-align: center; color: #484f58; font-size: 13px; margin-top: 48px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo-badge">NX</div>
+      <h1>Nexora Kernel Boot & Transition Simulation</h1>
+    </div>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="findings.html">Security Findings (7/7)</a>
+      <a href="boot-sim.html" class="active">Boot Simulation</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="controls">
+      <button class="btn btn-primary" id="btnNext" onclick="stepSim()">Next Step &rarr;</button>
+      <button class="btn" id="btnPlay" onclick="toggleAutoPlay()">Auto Play</button>
+      <button class="btn" onclick="resetSim()">Reset</button>
+    </div>
+
+    <div class="sim-grid">
+      <div class="card">
+        <h3 style="color: var(--heading); margin-bottom: 16px;">Execution Stages (Milestones M1–M6)</h3>
+        <div class="stages-list" id="stagesList">
+          <!-- Stages rendered by JS -->
+        </div>
+
+        <h4 style="color: var(--heading); margin: 20px 0 10px 0; font-size: 14px;">Console & Tracing Telemetry</h4>
+        <div class="log-window" id="logWindow">
+          <div class="log-line info">[BOOT] Nexora kernel initialization initialized.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="color: var(--heading); margin-bottom: 14px;">CPU Architectural State</h3>
+        <div id="cplDisplay" class="cpl-badge cpl-0">Privilege: Ring 0 (Kernel)</div>
+
+        <table class="reg-table">
+          <tr><td class="reg-name">RIP</td><td class="reg-val" id="regRIP">0x00100000</td></tr>
+          <tr><td class="reg-name">RSP</td><td class="reg-val" id="regRSP">0x00200000</td></tr>
+          <tr><td class="reg-name">CS / SS</td><td class="reg-val" id="regCS">0x08 / 0x10</td></tr>
+          <tr><td class="reg-name">GS Base</td><td class="reg-val" id="regGS">0x00000000</td></tr>
+          <tr><td class="reg-name">User RSP</td><td class="reg-val" id="regUserRSP">0x00000000</td></tr>
+          <tr><td class="reg-name">GDT / TSS</td><td class="reg-val" id="regGDT">Unset</td></tr>
+          <tr><td class="reg-name">IDT</td><td class="reg-val" id="regIDT">Unset</td></tr>
+          <tr><td class="reg-name">Heap Watermark</td><td class="reg-val" id="regHeap">0 KB</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Nexora Kernel State Machine Simulation &bull; Authored by abusuraihsakhri &bull; 2026
+  </footer>
+
+  <script>
+    const stages = [
+      {
+        name: "Stage 0: Early Boot & Multiboot2",
+        cpl: 0, rip: "0x00100000", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0x00000000", userRsp: "0x00000000",
+        gdt: "Early", idt: "Early", heap: "0 KB",
+        log: "[M0] Long mode enabled. Multiboot2 memory tags detected."
+      },
+      {
+        name: "Stage 1 (M1): Buddy Frame Allocator",
+        cpl: 0, rip: "0x00102400", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0x00000000", userRsp: "0x00000000",
+        gdt: "Early", idt: "Early", heap: "16 KB (Bitmap)",
+        log: "[M1] Physical frame allocator initialized over memory map. Monotonic 1 MiB bump replaced."
+      },
+      {
+        name: "Stage 2 (M2): Kernel Slab Heap & AI Caches",
+        cpl: 0, rip: "0x00104800", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0x00000000", userRsp: "0x00000000",
+        gdt: "Early", idt: "Early", heap: "128 KB (Slab Ready)",
+        log: "[M2] Slab caches initialized for ai_tensor and ai_work_node. Bounded reclamation active."
+      },
+      {
+        name: "Stage 3 (M3): Privilege Boundary (GDT, TSS, IDT, %gs)",
+        cpl: 0, rip: "0x00106200", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0xFFFF800000010000", userRsp: "0x00000000",
+        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "128 KB",
+        log: "[M3] GDT64, TSS rsp0, IDT, and per-CPU GS initialized via IA32_KERNEL_GS_BASE (0xC0000102)."
+      },
+      {
+        name: "Stage 4 (M4): Load Userspace ELF64",
+        cpl: 0, rip: "0x00108A00", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0xFFFF800000010000", userRsp: "0x00000000",
+        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "160 KB",
+        log: "[M4] ELF64 verified: pairwise PT_LOAD overlap check PASS, W^X PASS. Mapped to user space."
+      },
+      {
+        name: "Stage 5 (M4): Context Switch to Userspace (Ring 3)",
+        cpl: 3, rip: "0x00400000", rsp: "0x007FFFF0", cs: "0x23 / 0x1b", gs: "User GS", userRsp: "0x007FFFF0",
+        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "160 KB",
+        log: "[RING3] sysretq/iretq executed! Userspace application executing in Ring 3."
+      },
+      {
+        name: "Stage 6: System Call (swapgs & %gs Per-CPU Entry)",
+        cpl: 0, rip: "0x0010A000", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0xFFFF800000010000", userRsp: "0x007FFFF0",
+        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "160 KB",
+        log: "[SYSCALL] SYSCALL #1 (ai_tensor_create) entered. swapgs saved user RSP into %gs:8. Isolated stack."
+      },
+      {
+        name: "Stage 7: Return to Userspace (Canonical Check & sysretq)",
+        cpl: 3, rip: "0x00400020", rsp: "0x007FFFF0", cs: "0x23 / 0x1b", gs: "User GS", userRsp: "0x007FFFF0",
+        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "164 KB",
+        log: "[RETURN] Canonical RIP validated: bits 47..63 == 0. swapgs & sysretq returned cleanly to Ring 3."
+      }
+    ];
+
+    let currentStage = 0;
+    let autoPlayTimer = null;
+
+    function renderStages() {
+      const container = document.getElementById('stagesList');
+      container.innerHTML = stages.map((s, idx) => `
+        <div class="stage-item ${idx === currentStage ? 'active' : ''} ${idx < currentStage ? 'completed' : ''}">
+          <span class="stage-name">${s.name}</span>
+          <span class="stage-badge">${idx < currentStage ? 'DONE' : (idx === currentStage ? 'ACTIVE' : 'PENDING')}</span>
+        </div>
+      `).join('');
+    }
+
+    function updateDisplay() {
+      const s = stages[currentStage];
+      document.getElementById('regRIP').textContent = s.rip;
+      document.getElementById('regRSP').textContent = s.rsp;
+      document.getElementById('regCS').textContent = s.cs;
+      document.getElementById('regGS').textContent = s.gs;
+      document.getElementById('regUserRSP').textContent = s.userRsp;
+      document.getElementById('regGDT').textContent = s.gdt;
+      document.getElementById('regIDT').textContent = s.idt;
+      document.getElementById('regHeap').textContent = s.heap;
+
+      const cplEl = document.getElementById('cplDisplay');
+      if (s.cpl === 0) {
+        cplEl.className = 'cpl-badge cpl-0';
+        cplEl.textContent = 'Privilege: Ring 0 (Kernel Supervisor)';
+      } else {
+        cplEl.className = 'cpl-badge cpl-3';
+        cplEl.textContent = 'Privilege: Ring 3 (Unprivileged Userspace)';
+      }
+
+      const logWin = document.getElementById('logWindow');
+      const line = document.createElement('div');
+      line.className = 'log-line ' + (s.cpl === 3 ? 'ring3' : (currentStage > 0 ? 'success' : 'info'));
+      line.textContent = s.log;
+      logWin.appendChild(line);
+      logWin.scrollTop = logWin.scrollHeight;
+
+      renderStages();
+    }
+
+    function stepSim() {
+      if (currentStage < stages.length - 1) {
+        currentStage++;
+        updateDisplay();
+      } else {
+        stopAutoPlay();
+      }
+    }
+
+    function toggleAutoPlay() {
+      if (autoPlayTimer) {
+        stopAutoPlay();
+      } else {
+        document.getElementById('btnPlay').textContent = 'Pause';
+        autoPlayTimer = setInterval(() => {
+          if (currentStage < stages.length - 1) {
+            stepSim();
+          } else {
+            stopAutoPlay();
+          }
+        }, 1500);
+      }
+    }
+
+    function stopAutoPlay() {
+      if (autoPlayTimer) {
+        clearInterval(autoPlayTimer);
+        autoPlayTimer = null;
+        document.getElementById('btnPlay').textContent = 'Auto Play';
+      }
+    }
+
+    function resetSim() {
+      stopAutoPlay();
+      currentStage = 0;
+      document.getElementById('logWindow').innerHTML = '<div class="log-line info">[BOOT] Nexora kernel simulation initialized.</div>';
+      updateDisplay();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderStages();
+      updateDisplay();
+    });
+  </script>
+</body>
+</html>
