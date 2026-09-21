@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-21T18:55:00Z",
+  "updated_at": "2026-09-21T19:20:00Z",
   "project": "Nexora Operating System",
   "author": "abusuraihsakhri <abusuraihsakhri@gmail.com>",
   "security_audit": {
@@ -60,43 +60,50 @@
   },
   "unification_milestones": {
     "total_milestones": 6,
-    "status": "ready_for_execution",
+    "completed_milestones": 6,
+    "status": "completed",
     "milestones": [
       {
         "id": "M1",
         "name": "Physical Memory Manager",
         "description": "Buddy/bitmap frame allocator replacing 1 MiB monotonic bump allocator",
-        "status": "ready"
+        "status": "completed",
+        "commit": "e2a07ce"
       },
       {
         "id": "M2",
         "name": "Kernel Slab Heap with Reclamation",
         "description": "Slab caches for ai_tensor and ai_work_node with bounded memory usage",
-        "status": "planned"
+        "status": "completed",
+        "commit": "52da18b"
       },
       {
         "id": "M3",
         "name": "Privilege Boundary Wiring",
         "description": "Integrate Phase 5 GDT/TSS, IDT, and per-CPU GS into unified Phase 14 boot path",
-        "status": "planned"
+        "status": "completed",
+        "commit": "dea48cd"
       },
       {
         "id": "M4",
         "name": "Ring 3 Entry Point",
         "description": "Load ELF64 userspace stub via ELF loader and context-switch to userspace",
-        "status": "planned"
+        "status": "completed",
+        "commit": "080922b"
       },
       {
         "id": "M5",
         "name": "Exception Handling",
         "description": "Double-fault and page-fault handlers with exception fixup table recovery",
-        "status": "planned"
+        "status": "completed",
+        "commit": "080922b"
       },
       {
         "id": "M6",
         "name": "Work Scheduler Bridging",
         "description": "Bridge ai_work_graph synchronous execution to an async queue model",
-        "status": "planned"
+        "status": "completed",
+        "commit": "080922b"
       }
     ]
   }
