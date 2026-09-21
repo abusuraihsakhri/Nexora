@@ -1,9 +1,9 @@
 # Nexora Kernel — Remediation & Unification Plan
 
-Status: draft, awaiting approval before implementation begins.
-Scope: (1) fix the 7 findings from the security audit, (2) unify Phase 5 (Ring 3 / syscalls / ELF loader) with Phase 14 (AI kernel primitives) into one kernel image that boots to userspace, (3) publish an interactive findings site under `docs/` for GitHub Pages.
-
-No code changes have been made yet. This file is the plan only.
+Status: in progress.
+- Section 1 (Security Fixes 1–7): COMPLETED & VERIFIED (individual commits, 100% test pass).
+- Section 3 (Interactive Docs Site): COMPLETED (`docs/` ready for GitHub Pages).
+- Section 2 (Kernel Unification M1–M6): READY FOR IMPLEMENTATION.
 
 ## 0. Ground truth
 
