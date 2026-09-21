@@ -40,6 +40,8 @@ uint64_t nx_trace_emit(uint64_t timestamp_ns,
 uint64_t nx_trace_count(void);
 size_t nx_trace_copy_latest(nx_trace_event_t *out, size_t capacity);
 uint64_t nx_trace_checksum_latest(size_t max_events);
+int nx_irq_is_disabled(void);
+void nx_trace_set_mock_isr_hook(void (*hook)(void));
 
 #ifdef __cplusplus
 }

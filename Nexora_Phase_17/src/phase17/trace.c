@@ -16,6 +16,39 @@ typedef struct nx_trace_slot {
 
 static nx_trace_slot_t g_trace[NX_TRACE_CAPACITY];
 static atomic_ullong g_cursor = 0u;
+static void (*g_mock_isr_hook)(void) = NULL;
+
+void nx_trace_set_mock_isr_hook(void (*hook)(void)) {
+    g_mock_isr_hook = hook;
+}
+
+#if defined(__x86_64__) && !defined(__STDC_HOSTED__)
+static inline unsigned long nx_irq_save_disable(void) {
+    unsigned long flags;
+    __asm__ volatile("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
+    return flags;
+}
+static inline void nx_irq_restore(unsigned long flags) {
+    __asm__ volatile("pushq %0; popfq" : : "r"(flags) : "memory");
+}
+int nx_irq_is_disabled(void) {
+    unsigned long flags;
+    __asm__ volatile("pushfq; popq %0" : "=r"(flags) : : "memory");
+    return (flags & (1UL << 9)) == 0;
+}
+#else
+static _Atomic int g_irq_disabled = 0;
+static inline unsigned long nx_irq_save_disable(void) {
+    int prev = atomic_exchange_explicit(&g_irq_disabled, 1, memory_order_acquire);
+    return (unsigned long)prev;
+}
+static inline void nx_irq_restore(unsigned long flags) {
+    atomic_store_explicit(&g_irq_disabled, (int)flags, memory_order_release);
+}
+int nx_irq_is_disabled(void) {
+    return atomic_load_explicit(&g_irq_disabled, memory_order_acquire);
+}
+#endif
 
 void nx_trace_reset(void) {
     for (size_t i = 0u; i < NX_TRACE_CAPACITY; ++i) {
@@ -39,6 +72,14 @@ uint64_t nx_trace_emit(uint64_t timestamp_ns,
                        uint8_t flags,
                        uint64_t arg0,
                        uint64_t arg1) {
+    const unsigned long irq_flags = nx_irq_save_disable();
+
+    if (g_mock_isr_hook) {
+        void (*hook)(void) = g_mock_isr_hook;
+        g_mock_isr_hook = NULL;
+        hook();
+    }
+
     const uint64_t seq = atomic_fetch_add_explicit(&g_cursor, 1u, memory_order_acq_rel) + 1u;
     nx_trace_slot_t *slot = &g_trace[(seq - 1u) % NX_TRACE_CAPACITY];
 
@@ -56,6 +97,7 @@ uint64_t nx_trace_emit(uint64_t timestamp_ns,
     atomic_store_explicit(&slot->arg1, arg1, memory_order_relaxed);
     atomic_store_explicit(&slot->published_sequence, seq, memory_order_release);
     atomic_flag_clear_explicit(&slot->writer_lock, memory_order_release);
+    nx_irq_restore(irq_flags);
     return seq;
 }
 

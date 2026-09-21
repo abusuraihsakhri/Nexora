@@ -17,21 +17,6 @@
       "size": 601
     },
     {
-      "path": "Makefile",
-      "sha256": "a70356ea71439b0bbc1a0f37b81c13ae2184208eed75adedf2b12ece7ecd5958",
-      "size": 270
-    },
-    {
-      "path": "PHASE17_INTEGRATION.md",
-      "sha256": "2e9fb528e9f1e77f8f81fee8de4cc9e2852961efcfdab7a28c8867ba8a525961",
-      "size": 1472
-    },
-    {
-      "path": "README_PHASE17.md",
-      "sha256": "dc1d02a72f16fc8d343602589dcebda7fb3d46ca9bfc01974e62de6da7a57766",
-      "size": 1679
-    },
-    {
       "path": "configs/release_gate.json",
       "sha256": "84b9898ee8f0fd02a985632f78a7d566bb8b23fe2079f24eb186a0c6f345d6f9",
       "size": 315
@@ -58,13 +43,28 @@
     },
     {
       "path": "include/nexora/phase17/trace.h",
-      "sha256": "ebfbe109f99907d879773f45fdbd8e9023c670dd7ee754235780593c99d066bb",
-      "size": 1103
+      "sha256": "ccf1fe60d6938567947f25fffc85ec404c2d7bbaff4ee7ef4f3fbaac45492ee9",
+      "size": 1186
     },
     {
       "path": "include/nexora/phase17/watchdog.h",
       "sha256": "27e28897feff211be3385cf284fa7f08498ccb7fd78e07761d06a8238363bf1a",
       "size": 818
+    },
+    {
+      "path": "Makefile",
+      "sha256": "a70356ea71439b0bbc1a0f37b81c13ae2184208eed75adedf2b12ece7ecd5958",
+      "size": 270
+    },
+    {
+      "path": "PHASE17_INTEGRATION.md",
+      "sha256": "2e9fb528e9f1e77f8f81fee8de4cc9e2852961efcfdab7a28c8867ba8a525961",
+      "size": 1472
+    },
+    {
+      "path": "README_PHASE17.md",
+      "sha256": "dc1d02a72f16fc8d343602589dcebda7fb3d46ca9bfc01974e62de6da7a57766",
+      "size": 1679
     },
     {
       "path": "src/phase17/build_info.c",
@@ -78,8 +78,8 @@
     },
     {
       "path": "src/phase17/trace.c",
-      "sha256": "ec8badd4ef83fe497c98416b2af0ee85dd403ea96b26db968cabde321c0c9d94",
-      "size": 5800
+      "sha256": "0d95b03a3321e54bf307fb931d2e756390a148a3dc9e6c6d8867139af180a017",
+      "size": 7134
     },
     {
       "path": "src/phase17/watchdog.c",
@@ -93,8 +93,8 @@
     },
     {
       "path": "tests/test_phase17.c",
-      "sha256": "38810afb7287cb75f2776afa49a5fdfa3d1e2db19cb8cc57e33dfdc3ac0eed64",
-      "size": 2318
+      "sha256": "33a732f916fc52c68e6c0f317002c9265a9931cbf4c524bbd65bddeb2c6fdf21",
+      "size": 2947
     },
     {
       "path": "tools/benchmark_smoke.py",

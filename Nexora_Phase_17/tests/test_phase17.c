@@ -60,9 +60,30 @@ static void test_build_info(void) {
     assert(strcmp(b->phase, "17") == 0);
 }
 
+static int g_mock_isr_ran = 0;
+static void mock_isr_callback(void) {
+    assert(nx_irq_is_disabled() != 0);
+    g_mock_isr_ran = 1;
+    uint64_t isr_seq = nx_trace_emit(5555u, 9u, 1u, NX_TRACE_WARN, 0u, 0xAA, 0xBB);
+    assert(isr_seq > 0u);
+}
+
+static void test_trace_irq_safe(void) {
+    nx_trace_reset();
+    g_mock_isr_ran = 0;
+    nx_trace_set_mock_isr_hook(mock_isr_callback);
+
+    uint64_t main_seq = nx_trace_emit(1234u, 1u, 2u, NX_TRACE_INFO, 0u, 10, 20);
+    assert(main_seq > 0u);
+    assert(g_mock_isr_ran == 1);
+    assert(nx_trace_count() == 2u);
+    assert(nx_irq_is_disabled() == 0);
+}
+
 int main(void) {
     test_health();
     test_trace();
+    test_trace_irq_safe();
     test_watchdog();
     test_build_info();
     puts("phase17: all C tests passed");
