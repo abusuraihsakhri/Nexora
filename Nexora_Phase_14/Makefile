@@ -37,6 +37,7 @@ SYS_SOURCES := \
 	src/kernel/backend.c \
 	src/kernel/elf64.c \
 	src/kernel/syscall.c \
+	src/kernel/demo_elf.c \
 	src/ai/backend_bridge.c
 
 AI_SOURCES := \

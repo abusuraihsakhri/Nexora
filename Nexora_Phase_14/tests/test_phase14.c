@@ -10,7 +10,12 @@
 #include <kernel/slab.h>
 #include <kernel/x86_64.h>
 #include <kernel/idt.h>
+#include <kernel/demo_elf.h>
 #include <ai/backend_bridge.h>
+#include <nexora/elf64.h>
+#include <nexora/syscall.h>
+#include <nexora/process.h>
+#include <nexora/uaccess.h>
 
 static unsigned tests_run = 0;
 static unsigned tests_failed = 0;
@@ -382,6 +387,200 @@ static void test_idt_and_privilege_boundary(void) {
     CHECK(nexora_backend_get() != NULL);
 }
 
+struct test_map_record {
+    uintptr_t vaddr;
+    size_t memsz;
+    size_t filesz;
+    uint32_t flags;
+};
+
+static struct test_map_record g_test_maps[8];
+static u32 g_test_map_count = 0;
+
+static nexora_status_t test_vm_map_segment(
+    struct nexora_process *process,
+    uintptr_t vaddr,
+    size_t memsz,
+    const void *src,
+    size_t filesz,
+    uint32_t flags,
+    void *context
+) {
+    (void)process;
+    (void)src;
+    (void)context;
+    if (g_test_map_count < 8) {
+        g_test_maps[g_test_map_count].vaddr = vaddr;
+        g_test_maps[g_test_map_count].memsz = memsz;
+        g_test_maps[g_test_map_count].filesz = filesz;
+        g_test_maps[g_test_map_count].flags = flags;
+        g_test_map_count++;
+    }
+    return NEXORA_OK;
+}
+
+static bool test_permissive_validator(const struct nexora_process *process,
+                                      uintptr_t address,
+                                      size_t length,
+                                      bool write) {
+    (void)process;
+    (void)address;
+    (void)length;
+    (void)write;
+    return true;
+}
+
+static void test_ring3_elf_load_and_syscall(void) {
+    nexora_process_system_init();
+    struct nexora_process user_proc;
+    CHECK(nexora_process_init(&user_proc, 100, 1, UINTPTR_MAX) == NEXORA_OK);
+    nexora_uaccess_set_validator(test_permissive_validator);
+
+    ai_backend_bridge_install();
+
+    g_test_map_count = 0;
+    struct nexora_user_vm_ops vm_ops = {
+        .map_segment = test_vm_map_segment,
+    };
+    uintptr_t entry_rip = 0;
+    nexora_status_t status = nexora_elf64_load(
+        g_demo_elf,
+        g_demo_elf_size,
+        &user_proc,
+        &vm_ops,
+        NULL,
+        &entry_rip
+    );
+    CHECK(status == NEXORA_OK);
+    CHECK(entry_rip == 0x40000000);
+    CHECK(g_test_map_count > 0);
+
+    nexora_syscall_set_current_process(&user_proc);
+
+    /* Syscall: ABI Query */
+    struct nexora_abi_info abi = {0};
+    int64_t ret = nexora_syscall_dispatch(NEXORA_SYS_ABI_QUERY, (uintptr_t)&abi, 0, 0, 0, 0, 0);
+    CHECK(ret == NEXORA_OK);
+    CHECK(abi.abi_version == NEXORA_ABI_VERSION);
+    CHECK(abi.syscall_count == NEXORA_SYS_MAX);
+
+    /* Syscall: Tensor Create */
+    struct nexora_tensor_desc tensor_req = {
+        .struct_size = sizeof(tensor_req),
+        .dtype = NEXORA_DTYPE_F16,
+        .ndim = 2,
+        .location = NEXORA_LOC_CPU_RAM,
+        .flags = NEXORA_TENSOR_EPHEMERAL,
+        .shape = {32, 32},
+    };
+    nexora_handle_t tensor_h = 0;
+    ret = nexora_syscall_dispatch(NEXORA_SYS_AI_TENSOR_CREATE, (uintptr_t)&tensor_req, (uintptr_t)&tensor_h, 0, 0, 0, 0);
+    CHECK(ret == NEXORA_OK);
+    CHECK(tensor_h != 0);
+
+    /* Syscall: Work Submit */
+    struct nexora_work_desc work_req = {
+        .struct_size = sizeof(work_req),
+        .op = NEXORA_OP_NOOP,
+        .priority = 10,
+        .device_mask = NEXORA_DEVICE_CPU,
+        .deadline_ns = 5000,
+        .batch_id = 1,
+        .input_count = 1,
+        .output_count = 0,
+        .inputs = { tensor_h },
+    };
+    nexora_handle_t work_h = 0;
+    ret = nexora_syscall_dispatch(NEXORA_SYS_AI_WORK_SUBMIT, (uintptr_t)&work_req, (uintptr_t)&work_h, 0, 0, 0, 0);
+    CHECK(ret == NEXORA_OK);
+    CHECK(work_h != 0);
+
+    /* Syscall: Work Wait */
+    struct nexora_work_result work_res = { .struct_size = sizeof(work_res) };
+    ret = nexora_syscall_dispatch(NEXORA_SYS_AI_WORK_WAIT, work_h, 1000000, (uintptr_t)&work_res, 0, 0, 0);
+    CHECK(ret == NEXORA_OK);
+    CHECK(work_res.state == NEXORA_WORK_DONE);
+
+    /* Syscall: Tensor Release */
+    ret = nexora_syscall_dispatch(NEXORA_SYS_AI_TENSOR_RELEASE, tensor_h, 0, 0, 0, 0, 0);
+    CHECK(ret == NEXORA_OK);
+
+    nexora_syscall_process_cleanup(&user_proc);
+    CHECK(!user_proc.alive);
+}
+
+static void test_exception_handling_fixup_and_recovery(void) {
+    /* Test fixup table lookup */
+    uintptr_t fault_ip = 0xdeadbeef;
+    uintptr_t fixup_ip = 0xfeedface;
+    nexora_exception_fixup_register(fault_ip, fixup_ip);
+    CHECK(nexora_exception_fixup_lookup(fault_ip) == fixup_ip);
+    CHECK(nexora_exception_fixup_lookup(0x12345678) == 0);
+
+    /* Test kernel mode fault with fixup */
+    u64 pf_before = idt_page_fault_count();
+    struct interrupt_frame kframe = {
+        .vector = 14,
+        .error_code = 0,
+        .rip = fault_ip,
+        .cs = NEXORA_GDT_KERNEL_CODE,
+        .rflags = 0x202,
+        .rsp = 0,
+        .ss = NEXORA_GDT_KERNEL_DATA,
+    };
+    isr_common_handler(&kframe);
+    CHECK(idt_page_fault_count() == pf_before + 1);
+    CHECK(kframe.rip == fixup_ip);
+
+    /* Test user mode fault recovery */
+    struct nexora_process user_p;
+    CHECK(nexora_process_init(&user_p, 200, 0x10000, 0x7ffffffff000ull) == NEXORA_OK);
+    nexora_syscall_set_current_process(&user_p);
+    CHECK(user_p.alive);
+
+    struct interrupt_frame uframe = {
+        .vector = 14,
+        .error_code = 0x04,
+        .rip = 0x40001000,
+        .cs = NEXORA_GDT_USER_CODE | 3,
+        .rflags = 0x202,
+        .rsp = 0x7fffffffe000ull,
+        .ss = NEXORA_GDT_USER_DATA | 3,
+    };
+    isr_common_handler(&uframe);
+    CHECK(idt_page_fault_count() == pf_before + 2);
+    nexora_syscall_process_cleanup(&user_p);
+}
+
+static void test_async_queue_scheduler(void) {
+    ai_async_queue q;
+    ai_async_queue_init(&q);
+    CHECK(ai_async_queue_is_empty(&q));
+    CHECK(q.count == 0);
+
+    ai_work_node n1 = {.id = 1, .state = AI_WORK_RUNNING};
+    ai_work_node n2 = {.id = 2, .state = AI_WORK_RUNNING};
+    ai_work_node n3 = {.id = 3, .state = AI_WORK_RUNNING};
+
+    CHECK(ai_async_queue_enqueue(&q, &n1));
+    CHECK(ai_async_queue_enqueue(&q, &n2));
+    CHECK(ai_async_queue_enqueue(&q, &n3));
+    CHECK(!ai_async_queue_is_empty(&q));
+    CHECK(q.count == 3);
+    CHECK(q.enqueued_count == 3);
+
+    ai_work_node *d = ai_async_queue_dequeue(&q);
+    CHECK(d == &n1);
+    CHECK(q.count == 2);
+
+    /* Drain remainder */
+    u32 drained = ai_async_queue_drain(&q, NULL);
+    CHECK(drained == 2);
+    CHECK(ai_async_queue_is_empty(&q));
+    CHECK(n2.state == AI_WORK_DONE);
+    CHECK(n3.state == AI_WORK_DONE);
+}
+
 int main(void) {
     printf("TAP version 13\n");
     test_tensor_accounting();
@@ -397,6 +596,9 @@ int main(void) {
     test_slab_tensor_churn();
     test_slab_work_node_churn();
     test_idt_and_privilege_boundary();
+    test_ring3_elf_load_and_syscall();
+    test_exception_handling_fixup_and_recovery();
+    test_async_queue_scheduler();
     printf("1..%u\n", tests_run);
     printf("Phase 14 host verification: %s (%u/%u passed)\n",
            tests_failed == 0 ? "PASS" : "FAIL",

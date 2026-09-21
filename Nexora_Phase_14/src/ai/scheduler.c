@@ -86,6 +86,9 @@ bool ai_scheduler_run_to_completion(ai_scheduler *scheduler, ai_scheduler_run_re
             return r->completed;
         }
 
+        ai_async_queue queue;
+        ai_async_queue_init(&queue);
+
         ai_work_node *node = ai_scheduler_pick(scheduler);
         if (!node) {
             scheduler->deadlock_count++;
@@ -99,7 +102,8 @@ bool ai_scheduler_run_to_completion(ai_scheduler *scheduler, ai_scheduler_run_re
         }
 
         ai_scheduler_mark_running(scheduler, node);
-        ai_scheduler_mark_done(scheduler, node);
+        ai_async_queue_enqueue(&queue, node);
+        ai_async_queue_drain(&queue, scheduler);
     }
 
     scheduler->deadlock_count++;
@@ -109,4 +113,52 @@ bool ai_scheduler_run_to_completion(ai_scheduler *scheduler, ai_scheduler_run_re
     r->picks = scheduler->pick_count;
     r->candidates_scanned = scheduler->candidate_scan_count;
     return false;
+}
+
+void ai_async_queue_init(ai_async_queue *q) {
+    if (!q) return;
+    q->head = 0;
+    q->tail = 0;
+    q->count = 0;
+    q->enqueued_count = 0;
+    q->drained_count = 0;
+    for (u32 i = 0; i < AI_ASYNC_QUEUE_CAPACITY; ++i) {
+        q->in_flight[i] = NULL;
+    }
+}
+
+bool ai_async_queue_enqueue(ai_async_queue *q, ai_work_node *node) {
+    if (!q || !node || q->count >= AI_ASYNC_QUEUE_CAPACITY) return false;
+    q->in_flight[q->tail] = node;
+    q->tail = (q->tail + 1) % AI_ASYNC_QUEUE_CAPACITY;
+    q->count++;
+    q->enqueued_count++;
+    return true;
+}
+
+ai_work_node *ai_async_queue_dequeue(ai_async_queue *q) {
+    if (!q || q->count == 0) return NULL;
+    ai_work_node *node = q->in_flight[q->head];
+    q->in_flight[q->head] = NULL;
+    q->head = (q->head + 1) % AI_ASYNC_QUEUE_CAPACITY;
+    q->count--;
+    return node;
+}
+
+bool ai_async_queue_is_empty(const ai_async_queue *q) {
+    return !q || q->count == 0;
+}
+
+u32 ai_async_queue_drain(ai_async_queue *q, ai_scheduler *scheduler) {
+    if (!q) return 0;
+    u32 drained = 0;
+    while (q->count > 0) {
+        ai_work_node *node = ai_async_queue_dequeue(q);
+        if (node) {
+            ai_scheduler_mark_done(scheduler, node);
+            drained++;
+            q->drained_count++;
+        }
+    }
+    return drained;
 }

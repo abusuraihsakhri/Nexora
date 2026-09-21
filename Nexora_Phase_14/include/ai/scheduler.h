@@ -28,4 +28,21 @@ void ai_scheduler_mark_done(ai_scheduler *scheduler, ai_work_node *node);
 void ai_scheduler_mark_failed(ai_scheduler *scheduler, ai_work_node *node);
 bool ai_scheduler_run_to_completion(ai_scheduler *scheduler, ai_scheduler_run_report *report);
 
+#define AI_ASYNC_QUEUE_CAPACITY 64
+
+typedef struct {
+    ai_work_node *in_flight[AI_ASYNC_QUEUE_CAPACITY];
+    u32 head;
+    u32 tail;
+    u32 count;
+    u64 enqueued_count;
+    u64 drained_count;
+} ai_async_queue;
+
+void ai_async_queue_init(ai_async_queue *q);
+bool ai_async_queue_enqueue(ai_async_queue *q, ai_work_node *node);
+ai_work_node *ai_async_queue_dequeue(ai_async_queue *q);
+u32  ai_async_queue_drain(ai_async_queue *q, ai_scheduler *scheduler);
+bool ai_async_queue_is_empty(const ai_async_queue *q);
+
 #endif
