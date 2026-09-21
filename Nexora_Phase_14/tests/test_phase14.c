@@ -6,6 +6,7 @@
 #include <ai/tensor.h>
 #include <ai/work.h>
 #include <kernel/memory.h>
+#include <kernel/frame.h>
 
 static unsigned tests_run = 0;
 static unsigned tests_failed = 0;
@@ -231,6 +232,34 @@ static void test_malformed_ai_input_fuzz(void) {
     CHECK(ai_work_add_output_safe(node, NULL) != 0);
 }
 
+static void test_frame_allocator_churn(void) {
+    frame_init(0x1000000, 1024);
+    CHECK(frame_total_count() == 1024);
+    CHECK(frame_free_count() == 1024);
+
+    bool churn_ok = true;
+    uintptr_t batch[16];
+    for (unsigned cycle = 0; cycle < 10000; ++cycle) {
+        for (int i = 0; i < 16; ++i) {
+            batch[i] = frame_alloc();
+            if (batch[i] == 0 || !frame_is_allocated(batch[i])) {
+                churn_ok = false;
+                break;
+            }
+        }
+        for (int i = 0; i < 16; ++i) {
+            frame_free(batch[i]);
+            if (frame_is_allocated(batch[i])) {
+                churn_ok = false;
+                break;
+            }
+        }
+        if (!churn_ok) break;
+    }
+    CHECK(churn_ok);
+    CHECK(frame_free_count() == 1024);
+}
+
 int main(void) {
     printf("TAP version 13\n");
     test_tensor_accounting();
@@ -242,6 +271,7 @@ int main(void) {
     test_benchmark();
     test_phase14_suite();
     test_malformed_ai_input_fuzz();
+    test_frame_allocator_churn();
     printf("1..%u\n", tests_run);
     printf("Phase 14 host verification: %s (%u/%u passed)\n",
            tests_failed == 0 ? "PASS" : "FAIL",
