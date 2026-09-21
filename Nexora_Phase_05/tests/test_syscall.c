@@ -54,6 +54,7 @@ static void reset_runtime(void) {
     nexora_process_system_init();
     ASSERT_EQ(nexora_process_init(&p1, 1, 1, UINTPTR_MAX), NEXORA_OK);
     ASSERT_EQ(nexora_process_init(&p2, 2, 1, UINTPTR_MAX), NEXORA_OK);
+    nexora_process_set_parent(&p2, p1.pid);
     denied_write_start = 0;
     denied_write_end = 0;
     nexora_uaccess_set_validator(permissive_validator);
@@ -550,6 +551,25 @@ static void test_elf_loader_rejects_overlapping_segments(void) {
     ASSERT_EQ(capture.calls, 0);
 }
 
+static void test_capability_delegation_rejects_unrelated_process(void) {
+    reset_runtime();
+    struct nexora_process p3;
+    ASSERT_EQ(nexora_process_init(&p3, 3, 1, UINTPTR_MAX), NEXORA_OK);
+    nexora_process_set_parent(&p3, 999);
+
+    nexora_handle_t source = create_tensor(0);
+    struct nexora_cap_delegate request = {
+        .struct_size = sizeof(request),
+        .target_pid = 3,
+        .source_handle = source,
+        .rights = NEXORA_RIGHT_READ,
+    };
+    ASSERT_EQ(nexora_syscall_dispatch(NEXORA_SYS_AI_CAP_DELEGATE,
+        (uintptr_t)&request, 0, 0, 0, 0, 0), NEXORA_ERR(NEXORA_EPERM));
+
+    (void)nexora_process_unregister(&p3);
+}
+
 int main(void) {
     test_abi_query();
     test_abi_query_without_backend();
@@ -563,6 +583,7 @@ int main(void) {
     test_wait_timeout();
     test_capability_delegation_attenuates_rights();
     test_capability_delegation_output_fault_does_not_leak();
+    test_capability_delegation_rejects_unrelated_process();
     test_device_query();
     test_bad_user_pointer_and_unknown_syscall();
     test_wrong_handle_type_rejected();
@@ -573,6 +594,6 @@ int main(void) {
     test_elf_loader_rejects_nonexec_entry();
     test_elf_loader_rejects_overlapping_segments();
     test_syscall_return_frame_rejects_non_canonical_rip();
-    puts("Phase 5 host tests: PASS (22 test groups)");
+    puts("Phase 5 host tests: PASS (23 test groups)");
     return 0;
 }

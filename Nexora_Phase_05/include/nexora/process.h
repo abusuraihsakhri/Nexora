@@ -9,6 +9,7 @@
 
 struct nexora_process {
     uint32_t pid;
+    uint32_t parent_pid;
     uint8_t alive;
     uint8_t reserved[3];
     uintptr_t user_lo;
@@ -21,6 +22,7 @@ nexora_status_t nexora_process_init(struct nexora_process *process,
                                     uint32_t pid,
                                     uintptr_t user_lo,
                                     uintptr_t user_hi);
+void nexora_process_set_parent(struct nexora_process *process, uint32_t parent_pid);
 struct nexora_process *nexora_process_lookup(uint32_t pid);
 nexora_status_t nexora_process_unregister(struct nexora_process *process);
 

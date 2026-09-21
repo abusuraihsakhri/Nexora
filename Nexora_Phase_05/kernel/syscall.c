@@ -276,6 +276,9 @@ static nexora_status_t sys_cap_delegate(struct nexora_process *process,
 
     struct nexora_process *target = nexora_process_lookup(request.target_pid);
     if (!target) return NEXORA_ERR(NEXORA_ENOENT);
+    if (target->pid != process->pid && target->parent_pid != process->pid) {
+        return NEXORA_ERR(NEXORA_EPERM);
+    }
     uint8_t type = (uint8_t)((request.source_handle >> 32u) & 0xFFu);
     status = ops->retain(type, object);
     if (status != NEXORA_OK) return status;
