@@ -27,6 +27,7 @@ multiboot_header_end:
 
 .section .text
 .global _start
+.global stack_top
 .extern kmain
 
 .code32
@@ -140,3 +141,5 @@ pd_table:
 stack_bottom:
     .skip 65536
 stack_top:
+
+.section .note.GNU-stack,"",@progbits
