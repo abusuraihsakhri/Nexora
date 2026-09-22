@@ -138,7 +138,7 @@ verify-phase14: test-host $(KERNEL)
 run: $(ISO)
 	$(QEMU) \
 		-m 512M \
-		-smp 2 \
+		-smp 1 \
 		-cdrom $(ISO) \
 		-serial stdio \
 		-display gtk \
