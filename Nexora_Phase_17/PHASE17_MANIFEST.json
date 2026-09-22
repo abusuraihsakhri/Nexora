@@ -2,11 +2,6 @@
   "algorithm": "sha256",
   "files": [
     {
-      "path": ".github/workflows/phase17-release-gate.yml",
-      "sha256": "93314846dac48ade1ea43a83ac02360542ea7b6380f55d37d28b595832c9a313",
-      "size": 443
-    },
-    {
       "path": "CHANGELOG_PHASE17.md",
       "sha256": "1071ef64d5988d5e83eecf1d2cfaf6a82352e2b6c310dc57f4c6dd3d2a8f6212",
       "size": 543
@@ -103,18 +98,18 @@
     },
     {
       "path": "tools/make_manifest.py",
-      "sha256": "4cb5ed70b044948e07d3108be70ff36c5f0edd9a4a4a4c2adb5fc33e4b5f06dd",
+      "sha256": "4cb5ed70b044948e07d3108be70ff36c5f0edd9a4a4c2adb5fc33e4b5f06dd",
       "size": 1453
     },
     {
       "path": "tools/release_gate.py",
-      "sha256": "b1d68585487ec57dce6e92f2be69a5bcd80121902ac9dc8c40934906234a3cd9",
-      "size": 1486
+      "sha256": "1b134f71fbf4d3e99104e0cf3c3906e53ab5479567d7b6a8bb6b6e2f682f4e92",
+      "size": 1829
     },
     {
       "path": "tools/verify_manifest.py",
-      "sha256": "dd38265353fe7e0fcf45b0baa844c913fd282b271c433c071cf247c15c0fd2ba",
-      "size": 1164
+      "sha256": "2adb7e5cd971b062a1809ce4404190627efb6b74e62ab2b24dcb2276b19f01a6",
+      "size": 1902
     }
   ],
   "phase": 17,
