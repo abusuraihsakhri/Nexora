@@ -1,27 +1,31 @@
 #ifndef AIKERNEL_TYPES_H
 #define AIKERNEL_TYPES_H
 
-typedef unsigned char      u8;
-typedef unsigned short     u16;
-typedef unsigned int       u32;
-typedef unsigned long long u64;
+/*
+ * C's fixed-width and pointer-width integer types are part of the freestanding
+ * implementation. Using the standard definitions keeps kernel headers ABI-
+ * compatible with Nexora's public headers and prevents duplicate uintptr_t
+ * typedefs during host validation.
+ */
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 
-typedef signed char        i8;
-typedef signed short       i16;
-typedef signed int         i32;
-typedef signed long long   i64;
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
 
-typedef u64 usize;
-typedef i64 isize;
-typedef u64 uintptr_t;
+typedef int8_t  i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
 
-typedef enum {
-    false = 0,
-    true = 1
-} bool;
+typedef size_t    usize;
+typedef ptrdiff_t isize;
 
 #ifndef NULL
-#define NULL ((void*)0)
+#define NULL ((void *)0)
 #endif
 
 #endif
