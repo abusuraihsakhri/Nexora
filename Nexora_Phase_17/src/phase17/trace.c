@@ -16,13 +16,18 @@ typedef struct nx_trace_slot {
 
 static nx_trace_slot_t g_trace[NX_TRACE_CAPACITY];
 static atomic_ullong g_cursor = 0u;
+
+#if defined(__STDC_HOSTED__) && __STDC_HOSTED__
+static _Thread_local void (*g_mock_isr_hook)(void) = NULL;
+#else
 static void (*g_mock_isr_hook)(void) = NULL;
+#endif
 
 void nx_trace_set_mock_isr_hook(void (*hook)(void)) {
     g_mock_isr_hook = hook;
 }
 
-#if defined(__x86_64__) && !defined(__STDC_HOSTED__)
+#if defined(__x86_64__) && (!defined(__STDC_HOSTED__) || !__STDC_HOSTED__)
 static inline unsigned long nx_irq_save_disable(void) {
     unsigned long flags;
     __asm__ volatile("pushfq; popq %0; cli" : "=r"(flags) : : "memory");
@@ -37,16 +42,17 @@ int nx_irq_is_disabled(void) {
     return (flags & (1UL << 9)) == 0;
 }
 #else
-static _Atomic int g_irq_disabled = 0;
+static _Thread_local int g_irq_disabled = 0;
 static inline unsigned long nx_irq_save_disable(void) {
-    int prev = atomic_exchange_explicit(&g_irq_disabled, 1, memory_order_acquire);
-    return (unsigned long)prev;
+    const int previous = g_irq_disabled;
+    g_irq_disabled = 1;
+    return (unsigned long)previous;
 }
 static inline void nx_irq_restore(unsigned long flags) {
-    atomic_store_explicit(&g_irq_disabled, (int)flags, memory_order_release);
+    g_irq_disabled = (int)flags;
 }
 int nx_irq_is_disabled(void) {
-    return atomic_load_explicit(&g_irq_disabled, memory_order_acquire);
+    return g_irq_disabled;
 }
 #endif
 
@@ -80,13 +86,19 @@ uint64_t nx_trace_emit(uint64_t timestamp_ns,
         hook();
     }
 
-    const uint64_t seq = atomic_fetch_add_explicit(&g_cursor, 1u, memory_order_acq_rel) + 1u;
+    const uint64_t seq =
+        atomic_fetch_add_explicit(&g_cursor, 1u, memory_order_acq_rel) + 1u;
     nx_trace_slot_t *slot = &g_trace[(seq - 1u) % NX_TRACE_CAPACITY];
 
-    while (atomic_flag_test_and_set_explicit(&slot->writer_lock, memory_order_acquire)) {
-        /* Collision can occur only after ring wrap; keep the hot path allocation-free. */
+    /*
+     * Never spin indefinitely with interrupts disabled. If a writer collision
+     * occurs after ring wrap, drop this event rather than blocking progress.
+     */
+    if (atomic_flag_test_and_set_explicit(&slot->writer_lock, memory_order_acquire)) {
+        nx_irq_restore(irq_flags);
+        return 0u;
     }
-    /* Mark the slot unpublished while its payload is replaced. */
+
     atomic_store_explicit(&slot->published_sequence, 0u, memory_order_release);
     atomic_store_explicit(&slot->timestamp_ns, timestamp_ns, memory_order_relaxed);
     atomic_store_explicit(&slot->component_id, component_id, memory_order_relaxed);
@@ -97,6 +109,7 @@ uint64_t nx_trace_emit(uint64_t timestamp_ns,
     atomic_store_explicit(&slot->arg1, arg1, memory_order_relaxed);
     atomic_store_explicit(&slot->published_sequence, seq, memory_order_release);
     atomic_flag_clear_explicit(&slot->writer_lock, memory_order_release);
+
     nx_irq_restore(irq_flags);
     return seq;
 }
@@ -107,7 +120,8 @@ uint64_t nx_trace_count(void) {
 
 static int copy_sequence(uint64_t seq, nx_trace_event_t *out) {
     nx_trace_slot_t *slot = &g_trace[(seq - 1u) % NX_TRACE_CAPACITY];
-    const uint64_t before = atomic_load_explicit(&slot->published_sequence, memory_order_acquire);
+    const uint64_t before =
+        atomic_load_explicit(&slot->published_sequence, memory_order_acquire);
     if (before != seq) return 0;
 
     nx_trace_event_t ev;
@@ -121,7 +135,9 @@ static int copy_sequence(uint64_t seq, nx_trace_event_t *out) {
     ev.arg1 = atomic_load_explicit(&slot->arg1, memory_order_relaxed);
 
     atomic_thread_fence(memory_order_acquire);
-    if (atomic_load_explicit(&slot->published_sequence, memory_order_acquire) != seq) return 0;
+    if (atomic_load_explicit(&slot->published_sequence, memory_order_acquire) != seq) {
+        return 0;
+    }
     *out = ev;
     return 1;
 }
@@ -142,7 +158,7 @@ size_t nx_trace_copy_latest(nx_trace_event_t *out, size_t capacity) {
 }
 
 static uint64_t fnv1a_u64(uint64_t h, uint64_t v) {
-    for (unsigned i = 0; i < 8u; ++i) {
+    for (unsigned i = 0u; i < 8u; ++i) {
         h ^= (uint8_t)(v & 0xffu);
         h *= 1099511628211ull;
         v >>= 8u;
