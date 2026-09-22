@@ -1,136 +1,122 @@
-# AIKernel v0 Architecture
+# Nexora-RK architecture
 
-## Current boot path
+## 1. Current boot path
 
 ```text
 GRUB / Multiboot2
-        |
-        v
+        │
+        ▼
 32-bit protected-mode entry
-        |
-        v
-minimal page tables
-        |
-        v
+        │
+        ▼
+minimal identity page tables
+        │
+        ▼
 x86-64 long mode
-        |
-        v
+        │
+        ▼
 kmain()
-        |
-        +--> console
-        +--> early allocator
-        +--> tensor registry
-        +--> work graph
-        +--> scheduler
-        +--> capability prototype
+        │
+        ├── console + diagnostics
+        ├── early/frame/slab allocators
+        ├── GDT/TSS + IDT
+        ├── syscall MSRs + per-CPU boundary state
+        ├── Nexora backend bridge
+        ├── tensor/work semantic layer
+        ├── integration self-test
+        └── demonstration graph
 ```
 
-## Proposed long-term architecture
+The current boot path remains kernel-only after initialization. Ring-3 ELF loading and syscall behavior are exercised by the hosted integration suite; production user-process launch requires a real user VM mapping layer.
+
+## 2. Architectural split
+
+Nexora separates **semantic policy inputs** from low-level **mechanisms**.
 
 ```text
-+------------------------------------------------------+
-| Applications / agents / inference services          |
-+--------------------------+---------------------------+
-                           |
-                           v
-+------------------------------------------------------+
-| AI Runtime ABI                                       |
-| work submission | tensor handles | capabilities     |
-+--------------------------+---------------------------+
-                           |
-                           v
-+------------------------------------------------------+
-| Work Graph Manager                                  |
-| dependencies | deadlines | priorities | provenance  |
-+--------------------------+---------------------------+
-                           |
-             +-------------+-------------+
-             |                           |
-             v                           v
-+------------------------+    +------------------------+
-| AI Scheduler           |    | Tensor Memory Manager  |
-| CPU/GPU/NPU placement  |    | HBM/RAM/NVMe/remote   |
-+-----------+------------+    +-----------+------------+
-            |                             |
-            +-------------+---------------+
-                          |
-                          v
-+------------------------------------------------------+
-| Capability + isolation layer                        |
-+--------------------------+---------------------------+
-                           |
-                           v
-+------------------------------------------------------+
-| Device/resource model                               |
-| CPU | GPU | NPU | NIC | NVMe | remote accelerator |
-+------------------------------------------------------+
+Applications / runtimes
+        │
+        ▼
+Nexora ABI
+        │
+┌───────┴───────────────────────────────────────────┐
+│ Semantic plane                                   │
+│ tensor metadata · work graph · state · rights    │
+└───────┬───────────────────────────────────────────┘
+        │
+        ▼
+Nexora scheduler / placement policy
+        │
+┌───────┴───────────────────────────────────────────┐
+│ Mechanism plane                                  │
+│ CPU context · VM · interrupts · DMA · drivers    │
+└───────┬───────────────────────────────────────────┘
+        │
+        ▼
+resources / topology
 ```
 
-## Core kernel objects
+The v0.1 implementation contains only part of this model. In particular, heterogeneous device placement is represented semantically but not backed by real accelerator execution.
+
+## 3. Core objects
 
 ### Tensor
 
-A tensor is metadata describing a typed multidimensional data object.
+A tensor currently records type, shape, size, semantic flags, location class, identity, and a kernel reference count.
 
-Important future fields:
-
-- physical backing
-- virtual mappings
-- ownership
-- refcount
-- lifetime class
-- reuse distance hint
-- producer/consumer relationships
-- NUMA/device locality
-- compression/quantization state
+The critical distinction is between **metadata** and **backing storage**. Current tensor objects are metadata objects; a future VM-backed storage object must own physical pages/device memory and mapping rights.
 
 ### Work node
 
-Represents schedulable computation.
+A work node records an operation class, dependencies, priority, deadline, device mask, and input/output tensors. Work nodes retain their tensor dependencies so handle release cannot invalidate in-flight work.
 
-Important fields:
+Current execution is deterministic and synchronous. The graph/scheduler interfaces are intended to survive replacement by an asynchronous executor.
 
-- operation type
-- dependencies
-- input/output tensors
-- deadline
-- priority
-- accelerator requirements
-- estimated FLOPs
-- estimated memory traffic
-- placement cost
+### Handle and capability boundary
 
-### Capability
-
-Describes permission to operate on resources.
-
-Future direction:
+Userspace-visible resources are represented by generation-tagged handles carrying rights. Delegation:
 
 ```text
-capability = subject + object + rights + constraints
+source handle
+   │  resolve + require DELEGATE
+   ▼
+retain object
+   │
+   ▼
+allocate target handle with subset of source rights
 ```
 
-Example constraints:
+Object retain/release is mandatory. Delegation never transfers a raw kernel pointer.
 
-- tensor range
-- model identifier
-- time limit
-- accelerator quota
-- network destination
+### Observability
 
-## What v0 deliberately omits
+Phase 16/17 modules are compiled into the active kernel:
 
-- interrupts/IDT
-- APIC
-- SMP startup
-- physical page allocator
-- user mode
-- syscalls
-- filesystem
-- networking
-- PCI enumeration
-- real GPU driver
-- model runtime
-- tensor backing memory
+- bounded telemetry;
+- deterministic fault injection;
+- release-health aggregation;
+- structured trace ring;
+- watchdog targets;
+- immutable build identity.
 
-Those should be added only after the architectural experiments are specified.
+They use fixed-capacity storage and do not allocate dynamically.
+
+## 4. Safety boundary
+
+v0.1 is UP-only. Global allocators and registries are therefore not advertised as SMP-safe. The active QEMU configuration uses one CPU.
+
+Unrecoverable kernel exceptions are terminal. User faults are marked against the current process in host validation; on bare metal, the kernel stops rather than returning into a known-faulting context until a scheduler/process-exit path exists.
+
+Tensor mapping is deliberately unavailable instead of exposing kernel addresses.
+
+## 5. Next mechanisms
+
+The highest-value next mechanisms are:
+
+1. monotonic timer source;
+2. user address-space creation and teardown;
+3. VM-backed tensor storage/mapping;
+4. asynchronous simulated accelerator queues;
+5. graph-derived lifetime accounting;
+6. topology and transfer-cost model;
+7. SMP only after ownership and synchronization are designed explicitly.
