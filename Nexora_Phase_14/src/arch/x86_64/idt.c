@@ -1,6 +1,8 @@
 #include <kernel/idt.h>
 #include <kernel/x86_64.h>
 #include <kernel/printk.h>
+#include <kernel/panic.h>
+#include <nexora/syscall.h>
 
 static struct idt_entry64 s_idt[IDT_ENTRIES] __attribute__((aligned(16)));
 static struct idtr64 s_idtr;
@@ -57,33 +59,78 @@ u64 idt_gp_count(void) {
 
 extern uintptr_t nexora_exception_fixup_lookup(uintptr_t fault_ip);
 
+static void terminate_current_user_process(const char *reason) {
+    struct nexora_process *process = nexora_syscall_current_process();
+    if (process) nexora_syscall_process_cleanup(process);
+#if defined(HOST_TEST)
+    (void)reason;
+#else
+    /*
+     * Phase 14 has no runnable-process scheduler to switch to after a fatal
+     * user exception. Fail closed rather than IRET to the same faulting RIP.
+     */
+    panic(reason);
+#endif
+}
+
 void isr_common_handler(struct interrupt_frame *frame) {
-    if (!frame) return;
+    if (!frame) {
+#if !defined(HOST_TEST)
+        panic("null interrupt frame");
+#endif
+        return;
+    }
 
     if (frame->vector == 3) {
         g_breakpoint_count++;
         return;
     }
 
+    if (frame->vector == 8) {
+#if !defined(HOST_TEST)
+        panic("double fault");
+#else
+        return;
+#endif
+    }
+
     if (frame->vector == 14) {
         g_page_fault_count++;
-        /* Milestone M5: Fixup table inspection */
+
         uintptr_t fixup = nexora_exception_fixup_lookup((uintptr_t)frame->rip);
         if (fixup != 0) {
             frame->rip = (u64)fixup;
             return;
         }
-        /* Ring 3 fault: recoverable process fault */
-        if ((frame->cs & 3) == 3) {
+
+        if ((frame->cs & 3u) == 3u) {
+            terminate_current_user_process("fatal userspace page fault");
             return;
         }
+
+#if !defined(HOST_TEST)
+        panic("unhandled kernel page fault");
+#else
         return;
+#endif
     }
 
     if (frame->vector == 13) {
         g_gp_count++;
+        if ((frame->cs & 3u) == 3u) {
+            terminate_current_user_process("fatal userspace general-protection fault");
+            return;
+        }
+#if !defined(HOST_TEST)
+        panic("unhandled kernel general-protection fault");
+#else
         return;
+#endif
     }
+
+#if !defined(HOST_TEST)
+    panic("unhandled CPU exception");
+#endif
 }
 
 void idt_init(void) {
@@ -91,16 +138,9 @@ void idt_init(void) {
         idt_set_gate((u8)i, (void *)&isr_default_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_INTERRUPT, 0);
     }
 
-    /* Vector 3: #BP Breakpoint (Trap gate, DPL=3 for Ring 0 & Ring 3) */
     idt_set_gate(3, (void *)&isr3_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_USER_TRAP, 0);
-
-    /* Vector 8: #DF Double Fault */
     idt_set_gate(8, (void *)&isr8_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_INTERRUPT, 0);
-
-    /* Vector 13: #GP General Protection Fault */
     idt_set_gate(13, (void *)&isr13_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_INTERRUPT, 0);
-
-    /* Vector 14: #PF Page Fault */
     idt_set_gate(14, (void *)&isr14_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_INTERRUPT, 0);
 
     s_idtr.limit = (u16)(sizeof(s_idt) - 1u);
@@ -116,7 +156,6 @@ void idt_test_breakpoint(void) {
 #if !defined(HOST_TEST)
     __asm__ volatile("int $3");
 #else
-    /* Simulate CPU triggering vector 3 frame */
     struct interrupt_frame frame = {
         .vector = 3,
         .error_code = 0,
