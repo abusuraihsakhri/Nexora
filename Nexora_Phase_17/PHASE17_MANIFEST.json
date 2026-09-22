@@ -98,8 +98,8 @@
     },
     {
       "path": "tools/make_manifest.py",
-      "sha256": "4cb5ed70b044948e07d3108be70ff36c5f0edd9a4a4c2adb5fc33e4b5f06dd",
-      "size": 1453
+      "sha256": "e64c56b14ea629de4672624e1afd2a5985e8c22f5f4f8b047eb21aab89141450",
+      "size": 1721
     },
     {
       "path": "tools/release_gate.py",
