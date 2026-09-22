@@ -1,166 +1,297 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Nexora — Neural EXecution Orchestration and Resource Architecture. Research architecture and prototype status.">
+  <meta name="description" content="Nexora — Neural EXecution Orchestration and Resource Architecture. AI-native operating-system research, kernel status, architecture and experimental roadmap.">
+  <meta name="theme-color" content="#f6f7f4">
   <title>Nexora — AI-native operating-system research</title>
   <link rel="stylesheet" href="academia.css">
+  <script>
+    try {
+      if (localStorage.getItem("nexora-theme") === "dark") {
+        document.documentElement.dataset.theme = "dark";
+      }
+    } catch (_) {}
+  </script>
 </head>
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a class="wordmark" href="index.html"><strong>NEXORA</strong><span>Research folio · 2026</span></a>
+    <a class="wordmark" href="index.html" aria-label="Nexora home">
+      <strong>NEXORA</strong><span>AI systems research · 2026</span>
+    </a>
     <nav aria-label="Primary">
       <a class="active" href="index.html">Architecture</a>
+      <a data-nav-section="status" href="#status">Status</a>
+      <a data-nav-section="research" href="#research">Research</a>
       <a href="boot-sim.html">Boot study</a>
-      <a href="https://github.com/abusuraihsakhri/Nexora">Repository</a>
+      <a href="https://github.com/abusuraihsakhri/Nexora">GitHub</a>
     </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle light and dark theme">
+      <span data-theme-icon>◐</span><span data-theme-label>Dark</span>
+    </button>
   </div>
 </header>
 
 <main>
-  <section class="certificate" aria-labelledby="title">
-    <div class="cert-ornament">❦ · ❦ · ❦</div>
-    <div class="kicker">Architecture folio · Version 0.1 · September 2026</div>
-    <h1 id="title">Neural EXecution Orchestration and Resource Architecture</h1>
-    <p class="lede">
-      Nexora is an AI-native operating-system research project exploring whether the operating system can make better
-      resource decisions when tensors, computation graphs, model state, topology and deadlines are visible as first-class semantics.
-    </p>
-    <p class="hypothesis">
-      The central research question is not whether an operating system should replace AI frameworks. It is whether the OS can
-      coordinate memory, placement and execution more effectively when it understands more than processes, pages and devices.
-    </p>
+  <section class="hero reveal is-visible" aria-labelledby="title">
+    <div class="hero-copy">
+      <div class="eyebrow">Research architecture · Version 0.1</div>
+      <h1 id="title">An operating system that understands AI work.</h1>
+      <p class="lede">
+        Nexora — <strong>Neural EXecution Orchestration and Resource Architecture</strong> — is a research operating-system project
+        investigating what changes when tensors, computation graphs, model state, topology, deadlines and accelerator requirements
+        become visible to the system itself.
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="#thesis">Read the architecture</a>
+        <a class="button" href="boot-sim.html">Explore the boot study</a>
+        <a class="button" href="https://github.com/abusuraihsakhri/Nexora">Inspect the repository</a>
+      </div>
+    </div>
 
-    <dl class="cert-meta">
-      <div><dt>Primary study</dt><dd>Heterogeneous AI inference</dd></div>
-      <div><dt>Kernel line</dt><dd>Nexora-RK · x86-64 research kernel</dd></div>
-      <div><dt>Experimental line</dt><dd>Nexora-X · hosted co-kernel/runtime concept</dd></div>
-    </dl>
-
-    <div class="seal-row"><div class="wax-seal" aria-hidden="true">NX<br>RESEARCH</div></div>
+    <aside class="hero-aside" aria-label="Project summary">
+      <div class="hero-note">
+        <span>Primary target</span>
+        <strong>Multi-model heterogeneous inference</strong>
+      </div>
+      <div class="hero-note">
+        <span>Current kernel baseline</span>
+        <strong>Phase 14 · x86-64 research kernel</strong>
+      </div>
+      <div class="hero-note">
+        <span>System strategy</span>
+        <strong>Semantic policy above conventional mechanisms</strong>
+      </div>
+      <div class="hero-note">
+        <span>Design posture</span>
+        <strong>Measure claims; fail closed where mechanisms are incomplete</strong>
+      </div>
+    </aside>
   </section>
 
-  <section class="section" id="definition">
-    <div class="section-no">01 · Definition</div>
-    <div>
-      <h2>What Nexora is</h2>
+  <section class="metrics reveal" aria-label="Project facts">
+    <div class="metric"><span class="metric-value" data-count="8">8</span><span class="metric-label">Core primitives</span></div>
+    <div class="metric"><span class="metric-value" data-count="16">16</span><span class="metric-label">Historical phase folders</span></div>
+    <div class="metric"><span class="metric-value" data-count="5">5</span><span class="metric-label">Repository CI gates</span></div>
+    <div class="metric"><span class="metric-value" data-count="1">1</span><span class="metric-label">Current integrated kernel baseline</span></div>
+  </section>
+
+  <section class="content-section reveal" id="thesis" data-section>
+    <div class="section-label">01 · Thesis</div>
+    <div class="section-body">
+      <h2>The OS currently sees less than the workload knows.</h2>
       <p class="section-intro">
-        Nexora introduces an operating-system semantic plane beneath or alongside established AI frameworks. The project is
-        deliberately narrower than a general-purpose Linux replacement: it concentrates on the mechanisms where AI workload
-        knowledge could change scheduling, memory lifetime, state residency and accelerator placement.
+        AI runtimes know that a tensor is temporary, that a KV cache should remain resident, that one operation depends on another,
+        that a transfer crosses a slow topology edge, or that a request carries a latency deadline. A conventional kernel typically
+        receives only lower-level effects of that knowledge: allocations, mappings, threads, files and device calls.
       </p>
+
+      <div class="two-col">
+        <article class="paper">
+          <div class="eyebrow">Conventional view</div>
+          <div class="paper-rule"><span class="num">01</span><p><strong>Processes and threads</strong> are scheduled without direct knowledge of model graphs or tensor dependencies.</p></div>
+          <div class="paper-rule"><span class="num">02</span><p><strong>Virtual pages</strong> do not inherently reveal whether data is transient activation memory, persistent weights or reusable model state.</p></div>
+          <div class="paper-rule"><span class="num">03</span><p><strong>Devices</strong> expose queues and memory, while higher-level placement intent remains largely outside the OS policy loop.</p></div>
+        </article>
+
+        <article class="paper">
+          <div class="eyebrow">Nexora hypothesis</div>
+          <div class="paper-rule"><span class="num">01</span><p><strong>Semantic objects</strong> make AI-specific intent explicit without replacing the low-level kernel mechanisms beneath them.</p></div>
+          <div class="paper-rule"><span class="num">02</span><p><strong>Graph and lifetime visibility</strong> may allow earlier reclamation, better placement and clearer admission decisions.</p></div>
+          <div class="paper-rule"><span class="num">03</span><p><strong>Topology-aware scheduling</strong> may account for transfer cost and state locality instead of treating all runnable work as equivalent.</p></div>
+        </article>
+      </div>
+
       <div class="callout">
-        <strong>Scope discipline.</strong> Nexora does not initially attempt to replace PyTorch, JAX, CUDA, ROCm, OpenXLA,
-        Kubernetes or model-serving frameworks. Those systems remain valuable layers; Nexora investigates the machine-level
-        decisions that sit below them.
+        <strong>The important constraint:</strong> Nexora is not framed as “Linux, but AI.” The research question is narrower:
+        which AI semantics are valuable enough to become OS-visible, and can that visibility measurably improve resource management
+        without moving entire frameworks into the kernel?
       </div>
     </div>
   </section>
 
-  <section class="section" id="primitives">
-    <div class="section-no">02 · Primitives</div>
-    <div>
-      <h2>Eight first-class semantics</h2>
-      <p class="section-intro">The architecture is organized around eight objects that make AI execution intent explicit.</p>
-      <div class="grid">
-        <article class="card"><span class="index">01 / NXTENSOR</span><h3>NXTensor</h3><p>Typed multidimensional data with shape, size, location, mutability, lifetime and reuse hints visible to the system.</p></article>
-        <article class="card"><span class="index">02 / NXWORK</span><h3>NXWork</h3><p>A schedulable semantic operation with inputs, outputs, priority, deadline and resource constraints.</p></article>
-        <article class="card"><span class="index">03 / NXGRAPH</span><h3>NXGraph</h3><p>A dependency graph that exposes readiness, lifetime boundaries and opportunities for parallel execution.</p></article>
-        <article class="card"><span class="index">04 / NXSTATE</span><h3>NXState</h3><p>Persistent model resources such as weights, KV caches, adapters and session state.</p></article>
-        <article class="card"><span class="index">05 / NXRESOURCE</span><h3>NXResource</h3><p>A common description of CPUs, accelerators, memory tiers, storage and network resources.</p></article>
-        <article class="card"><span class="index">06 / NXTOPOLOGY</span><h3>NXTopology</h3><p>The physical and logical interconnect graph: NUMA distance, PCIe hierarchy, bandwidth and locality.</p></article>
-        <article class="card"><span class="index">07 / NXCAPABILITY</span><h3>NXCapability</h3><p>Explicit authority for accessing and delegating resources, constrained by rights and object lifetime.</p></article>
-        <article class="card"><span class="index">08 / NXSCHEDULER</span><h3>NXScheduler</h3><p>A scheduling model that can account for compute time, transfer cost, queue delay, pressure and deadlines.</p></article>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" id="architecture">
-    <div class="section-no">03 · Structure</div>
-    <div>
-      <h2>Semantic plane, mechanism plane</h2>
+  <section class="content-section reveal" id="primitives" data-section>
+    <div class="section-label">02 · Primitives</div>
+    <div class="section-body">
+      <h2>Eight objects define the semantic plane.</h2>
       <p class="section-intro">
-        The design separates AI-specific meaning from low-level kernel mechanism. This keeps the experimental hypothesis legible:
-        semantic policy may evolve without pretending that ordinary paging, interrupts and privilege boundaries disappear.
+        These are architectural concepts, not marketing categories. Each primitive exists to expose information that a resource
+        manager could plausibly use for memory, scheduling, placement, isolation or state-management decisions.
       </p>
-      <div class="code-frame"><pre>
-Applications / agents
-        │
-PyTorch · JAX · serving runtimes
-        │
-Nexora runtime adapter
-        │
-Nexora AI ABI
-        │
-┌─────────────────────────────── NEXORA ───────────────────────────────┐
-│ Semantic plane                       Mechanism plane                 │
-│ ──────────────                       ───────────────                 │
-│ NXGraph / NXWork                     privilege & syscall boundary   │
-│ NXTensor / NXState                   physical + virtual memory      │
-│ NXCapability                         interrupts / timers            │
-│ NXTopology                           device / DMA mechanisms        │
-│                    └── NXScheduler ──┘                              │
-│                           │                                         │
-│                       NXResource                                    │
-└───────────────────────────┼─────────────────────────────────────────┘
-                    heterogeneous hardware
-      </pre></div>
+
+      <div class="four-col">
+        <article class="card"><span class="card-index">01 / NXTENSOR</span><h3>NXTensor</h3><p>Shape, dtype, size, location, mutability, expected lifetime and reuse information for AI data objects.</p></article>
+        <article class="card"><span class="card-index">02 / NXWORK</span><h3>NXWork</h3><p>A schedulable operation carrying inputs, outputs, priority, deadline and eligible-resource constraints.</p></article>
+        <article class="card"><span class="card-index">03 / NXGRAPH</span><h3>NXGraph</h3><p>Dependencies, readiness and execution structure expressed as a graph rather than inferred from opaque application behavior.</p></article>
+        <article class="card"><span class="card-index">04 / NXSTATE</span><h3>NXState</h3><p>Long-lived model resources such as weights, KV caches, adapters, compiled artifacts and session state.</p></article>
+        <article class="card"><span class="card-index">05 / NXRESOURCE</span><h3>NXResource</h3><p>A uniform resource description spanning CPUs, accelerators, memory tiers, storage and network-capable devices.</p></article>
+        <article class="card"><span class="card-index">06 / NXTOPOLOGY</span><h3>NXTopology</h3><p>NUMA distance, PCIe hierarchy, bandwidth and other locality relationships that change movement cost.</p></article>
+        <article class="card"><span class="card-index">07 / NXCAPABILITY</span><h3>NXCapability</h3><p>Explicit authority over resources and objects, with delegation permitted only when lifetime accounting is correct.</p></article>
+        <article class="card"><span class="card-index">08 / NXSCHEDULER</span><h3>NXScheduler</h3><p>Policy that can consider dependency readiness, deadlines, queue delay, transfer cost, memory pressure and locality.</p></article>
+      </div>
     </div>
   </section>
 
-  <section class="section" id="status">
-    <div class="section-no">04 · Ledger</div>
-    <div>
-      <h2>Implementation status</h2>
+  <section class="content-section reveal" id="architecture" data-section>
+    <div class="section-label">03 · Architecture</div>
+    <div class="section-body">
+      <h2>Semantics above mechanisms, not instead of them.</h2>
       <p class="section-intro">
-        The repository contains historical phase snapshots. The status below distinguishes code that forms the current integrated
-        research-kernel baseline from later validation and observability packages. This is intentionally more conservative than a
-        marketing roadmap.
+        Nexora keeps the conventional kernel responsibilities—privilege, memory protection, interrupt handling, physical allocation,
+        syscalls and device mechanisms—separate from the experimental AI semantic layer. That separation is essential because it makes
+        the research claim falsifiable: the semantic plane should earn its complexity through measurable policy improvements.
       </p>
-      <div class="status-ledger">
-        <div class="ledger-row"><div class="phase">Phases 01–14</div><div class="state">Integrated kernel lineage</div><p>Boot, allocators, AI metadata/work graph, privilege structures, syscall/ELF validation and host-side integration tests. Phase 14 is the last complete kernel tree in the historical layout.</p></div>
-        <div class="ledger-row"><div class="phase">Phase 15</div><div class="state">Benchmark tooling</div><p>JSONL benchmark schema, summaries and threshold-based regression gates. Useful measurement infrastructure; not itself a kernel feature.</p></div>
-        <div class="ledger-row"><div class="phase">Phase 16</div><div class="state">Validation overlay</div><p>Telemetry, deterministic fault injection and release-health tooling. CI validates this package independently while kernel integration is treated as explicit work, not implied.</p></div>
-        <div class="ledger-row"><div class="phase">Phase 17</div><div class="state">Release discipline</div><p>Health, trace, watchdog and release-gate mechanisms. The repository-wide CI now executes its gate from the correct root workflow location and verifies a committed integrity manifest.</p></div>
+
+      <div class="architecture-map">
+        <article class="arch-layer"><span>Layer 05</span><div><h3>Applications and agents</h3><p>Inference services, model hosts, agent systems and scientific workloads express goals through existing frameworks and Nexora-aware adapters.</p></div></article>
+        <article class="arch-layer"><span>Layer 04</span><div><h3>Framework/runtime adapters</h3><p>PyTorch, JAX, serving systems and compiler runtimes remain outside the kernel while exposing selected semantics through a stable interface.</p></div></article>
+        <article class="arch-layer"><span>Layer 03</span><div><h3>Nexora semantic plane</h3><p>NXTensor, NXWork, NXGraph, NXState, NXTopology and NXCapability provide the policy-relevant vocabulary.</p></div></article>
+        <article class="arch-layer"><span>Layer 02</span><div><h3>Kernel mechanism plane</h3><p>Privilege boundaries, address spaces, frame/slab allocation, syscalls, exceptions, timers and device-control primitives enforce the decisions.</p></div></article>
+        <article class="arch-layer"><span>Layer 01</span><div><h3>Heterogeneous hardware</h3><p>CPU, accelerator memory, GPU/NPU-class compute, storage, fabric and topology form the physical substrate.</p></div></article>
+      </div>
+
+      <div class="flow" aria-label="Example semantic flow">
+        <span class="flow-node">model request</span><span class="flow-arrow">→</span>
+        <span class="flow-node">NXGraph</span><span class="flow-arrow">→</span>
+        <span class="flow-node">NXWork readiness</span><span class="flow-arrow">→</span>
+        <span class="flow-node">topology + state locality</span><span class="flow-arrow">→</span>
+        <span class="flow-node">resource placement</span>
+      </div>
+
+      <div class="code-frame" style="margin-top:24px;"><pre>Applications / model servers
+        │
+        ▼
+Frameworks + runtime adapters
+        │
+        ▼
+┌──────────────────── NEXORA SEMANTIC PLANE ────────────────────┐
+│ NXGraph  NXWork  NXTensor  NXState  NXTopology  NXCapability │
+│                         │                                     │
+│                    NXScheduler                                │
+└─────────────────────────┼─────────────────────────────────────┘
+                          ▼
+┌──────────────────── KERNEL MECHANISMS ────────────────────────┐
+│ privilege │ VM │ allocators │ faults │ syscalls │ devices   │
+└─────────────────────────┼─────────────────────────────────────┘
+                          ▼
+            heterogeneous compute + memory</pre></div>
+    </div>
+  </section>
+
+  <section class="content-section reveal" id="status" data-section>
+    <div class="section-label">04 · Status</div>
+    <div class="section-body">
+      <h2>What exists today, and what does not.</h2>
+      <p class="section-intro">
+        The repository is deliberately explicit about implementation maturity. Historical phase directories document development
+        steps, but only Phase 14 is presently treated as the full integrated kernel baseline. Later phases are independently validated
+        adjunct packages until their code is migrated into a unified kernel tree.
+      </p>
+
+      <div class="status-panel">
+        <div class="status-row"><div class="phase">Phases 01–14</div><div class="state">Integrated lineage</div><p>Boot, allocators, AI object metadata/work graph, GDT/TSS/IDT, syscall entry, ELF64 validation and host-side integration tests. Phase 14 is the current complete kernel snapshot.</p></div>
+        <div class="status-row"><div class="phase">Phase 15</div><div class="state">Benchmark package</div><p>JSONL benchmark events, summaries and threshold-defined regression checks. It is measurement infrastructure, not a kernel feature by itself.</p></div>
+        <div class="status-row"><div class="phase">Phase 16</div><div class="state">Validation package</div><p>Telemetry, deterministic fault injection and release-health concepts. CI validates this package independently.</p></div>
+        <div class="status-row"><div class="phase">Phase 17</div><div class="state">Release package</div><p>Health, tracing, watchdog and release-gate mechanisms. Manifest verification and concurrency behavior were hardened during the repository audit.</p></div>
+        <div class="status-row"><div class="phase">Phase 08</div><div class="state">Repository gap</div><p>No Phase 8 directory or recoverable archive exists in the repository or accessible project file history. The gap is documented rather than reconstructed from assumptions.</p></div>
+      </div>
+
+      <div class="three-col" style="margin-top:16px;">
+        <article class="card"><span class="card-index">VALIDATED</span><h3>Kernel link + host tests</h3><p>The repository CI compiles the freestanding kernel and executes Phase 14 host-side verification from the current source tree.</p></article>
+        <article class="card"><span class="card-index">FAIL-CLOSED</span><h3>Unsafe mechanisms disabled</h3><p>Capability delegation and userspace tensor mapping are not pretended to work before real object lifetime and VM-backed mapping exist.</p></article>
+        <article class="card"><span class="card-index">SCOPE</span><h3>Uniprocessor prototype</h3><p>The kernel is explicitly treated as single-core until AP startup, per-CPU state and synchronization are engineered end-to-end.</p></article>
       </div>
     </div>
   </section>
 
-  <section class="section" id="hypotheses">
-    <div class="section-no">05 · Inquiry</div>
-    <div>
-      <h2>Research hypotheses</h2>
-      <p class="section-intro">Each claim is framed as something to measure rather than something already proven.</p>
-      <div class="grid">
-        <article class="card"><span class="index">H1</span><h3>Semantic tensor lifetime</h3><p>Can producer/consumer knowledge reduce peak memory by reclaiming intermediates earlier than lifetime-blind allocation?</p></article>
-        <article class="card"><span class="index">H2</span><h3>Locality-aware placement</h3><p>Can topology-aware decisions reduce host↔device and device↔device transfer cost?</p></article>
-        <article class="card"><span class="index">H3</span><h3>Graph-aware scheduling</h3><p>Can dependency-aware dispatch improve tail latency under mixed-priority inference load?</p></article>
-        <article class="card"><span class="index">H4</span><h3>Shared tensor handles</h3><p>Can capability-protected backing objects reduce duplication without weakening isolation? This requires correct lifetime accounting before enablement.</p></article>
-        <article class="card"><span class="index">H5</span><h3>Persistent model state</h3><p>Can OS-visible model and KV-cache residency reduce cold-start and time-to-first-token?</p></article>
-        <article class="card"><span class="index">TARGET</span><h3>Single-host multi-model inference</h3><p>The first target workload is concurrent LLM inference on a heterogeneous machine under memory pressure.</p></article>
+  <section class="content-section reveal" id="engineering" data-section>
+    <div class="section-label">05 · Engineering</div>
+    <div class="section-body">
+      <h2>Current subsystem maturity.</h2>
+      <p class="section-intro">
+        These bars are descriptive engineering-status indicators, not completion percentages for the whole operating system. They
+        communicate where the repository has concrete mechanisms versus where the next architecture work is concentrated.
+      </p>
+
+      <div class="paper meter-list">
+        <div class="meter-row"><strong>Boot + x86-64 foundation</strong><div class="meter-track" data-meter="78%"></div><span>prototype solid</span></div>
+        <div class="meter-row"><strong>Host validation + CI</strong><div class="meter-track" data-meter="88%"></div><span>strong</span></div>
+        <div class="meter-row"><strong>ELF / ABI validation</strong><div class="meter-track" data-meter="76%"></div><span>host tested</span></div>
+        <div class="meter-row"><strong>Process virtual memory</strong><div class="meter-track" data-meter="28%"></div><span>major work</span></div>
+        <div class="meter-row"><strong>Object lifetime / delegation</strong><div class="meter-track" data-meter="22%"></div><span>disabled safely</span></div>
+        <div class="meter-row"><strong>SMP / per-CPU execution</strong><div class="meter-track" data-meter="14%"></div><span>not integrated</span></div>
+        <div class="meter-row"><strong>AI semantic scheduling</strong><div class="meter-track" data-meter="34%"></div><span>research prototype</span></div>
       </div>
     </div>
   </section>
 
-  <section class="section" id="rules">
-    <div class="section-no">06 · Method</div>
-    <div>
-      <h2>Four questions for every mechanism</h2>
-      <p class="section-intro">Architectural additions should earn their complexity with an explicit systems argument and a measurable result.</p>
-      <div class="rules">
-        <div class="rule"><div><strong>Problem.</strong> What concrete limitation in existing systems is being addressed?</div></div>
-        <div class="rule"><div><strong>Layer.</strong> Why is the operating system the right place to act, rather than a runtime or framework?</div></div>
-        <div class="rule"><div><strong>Mechanism.</strong> What minimum kernel primitive is required, and what is deliberately left outside the kernel?</div></div>
-        <div class="rule"><div><strong>Metric.</strong> Which reproducible measurement would falsify or support the hypothesis?</div></div>
+  <section class="content-section reveal" id="research" data-section>
+    <div class="section-label">06 · Research</div>
+    <div class="section-body">
+      <h2>Five hypotheses worth measuring.</h2>
+      <p class="section-intro">
+        The architecture is useful only if it changes measurable system behavior. Nexora therefore treats the following as experiments,
+        not as claims already proven by the current prototype.
+      </p>
+
+      <div class="two-col">
+        <article class="card"><span class="card-index">H1 / MEMORY</span><h3>Semantic tensor lifetime</h3><p>Can explicit producer/consumer lifetime knowledge reduce peak memory and allocator pressure compared with lifetime-blind allocation?</p></article>
+        <article class="card"><span class="card-index">H2 / LOCALITY</span><h3>Topology-aware placement</h3><p>Can placement informed by NUMA and accelerator topology reduce movement cost and avoid avoidable host↔device traffic?</p></article>
+        <article class="card"><span class="card-index">H3 / SCHEDULING</span><h3>Graph-aware dispatch</h3><p>Can dependency readiness and deadlines improve tail latency under mixed-priority, multi-model inference?</p></article>
+        <article class="card"><span class="card-index">H4 / SHARING</span><h3>Capability-protected shared tensors</h3><p>Can shared backing objects reduce copies while retaining strong lifetime and authority guarantees across processes?</p></article>
+        <article class="card"><span class="card-index">H5 / STATE</span><h3>Persistent model residency</h3><p>Can OS-visible weights, adapters and KV-cache state improve cold-start, TTFT and memory reuse across workloads?</p></article>
+        <article class="card"><span class="card-index">FIRST WORKLOAD</span><h3>Single-host multi-model LLM inference</h3><p>The first serious workload should stress memory pressure, competing deadlines, model-state residency and heterogeneous placement on one machine.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="content-section reveal" id="boundaries" data-section>
+    <div class="section-label">07 · Boundaries</div>
+    <div class="section-body">
+      <h2>What Nexora deliberately does not try to replace.</h2>
+      <p class="section-intro">
+        Scope is part of the architecture. Rebuilding mature ecosystems would obscure the actual research question and consume effort
+        without demonstrating why AI semantics belong in the operating system.
+      </p>
+
+      <div class="three-col">
+        <article class="card"><span class="card-index">FRAMEWORKS</span><h3>PyTorch and JAX</h3><p>They remain programming and execution frameworks. Nexora should consume selected semantics, not reimplement their user-facing model abstractions.</p></article>
+        <article class="card"><span class="card-index">DEVICE STACKS</span><h3>CUDA and ROCm</h3><p>Modern accelerator drivers and compiler stacks remain external dependencies in the practical experimental path, especially for Nexora-X.</p></article>
+        <article class="card"><span class="card-index">ORCHESTRATION</span><h3>Kubernetes and serving systems</h3><p>Cluster scheduling and service-level orchestration remain separate layers. Nexora focuses first on machine-level resource semantics.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="content-section reveal" id="roadmap" data-section>
+    <div class="section-label">08 · Next</div>
+    <div class="section-body">
+      <h2>The next engineering sequence is architectural, not cosmetic.</h2>
+      <p class="section-intro">
+        The repository is now safer and better validated, but the next useful milestone is not another numbered overlay. It is the
+        migration from historical snapshots into one authoritative kernel source tree with end-to-end process and memory semantics.
+      </p>
+
+      <div class="timeline">
+        <article class="timeline-item"><h3>Unify the source tree</h3><p>Move the Phase 14 baseline and validated Phase 15–17 mechanisms into one maintained kernel/runtime/test hierarchy while keeping historical phases as archives.</p></article>
+        <article class="timeline-item"><h3>Implement process virtual memory</h3><p>Build real address-space creation, ELF segment mapping, user stacks, teardown and rollback instead of relying on abstract host-test mapping callbacks.</p></article>
+        <article class="timeline-item"><h3>Add reference-counted kernel objects</h3><p>Introduce a lifetime model that makes capability delegation, shared tensors and multi-process resource ownership safe by construction.</p></article>
+        <article class="timeline-item"><h3>Back NXTensor with real storage</h3><p>Connect tensor metadata to physical frames or device-backed memory and expose controlled user mappings rather than descriptor pointers.</p></article>
+        <article class="timeline-item"><h3>Build runnable process scheduling</h3><p>Replace fault-time fail-stop behavior with process termination, scheduler handoff and return to another runnable context.</p></article>
+        <article class="timeline-item"><h3>Then bring up SMP</h3><p>Add AP startup, per-CPU structures, locking/lock-free policies and interrupt-safe observability only after the single-core invariants are coherent.</p></article>
       </div>
     </div>
   </section>
 </main>
 
 <footer class="site-footer">
-  <div class="header-inner">NEXORA · Neural EXecution Orchestration and Resource Architecture · Research project · 2026</div>
+  <div class="footer-inner">
+    <span>NEXORA · Neural EXecution Orchestration and Resource Architecture</span>
+    <span>Research architecture · September 2026</span>
+  </div>
 </footer>
+
+<script src="site.js"></script>
 </body>
 </html>
