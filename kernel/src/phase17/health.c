@@ -1,7 +1,17 @@
 #include "nexora/phase17/health.h"
 
 #include <stdatomic.h>
-#include <string.h>
+
+static void nx_zero(void *ptr, size_t n) {
+    unsigned char *p = (unsigned char *)ptr;
+    for (size_t i = 0; i < n; ++i) p[i] = 0;
+}
+
+static void nx_copy(void *dst, const void *src, size_t n) {
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+    for (size_t i = 0; i < n; ++i) d[i] = s[i];
+}
 
 typedef struct nx_health_slot {
     atomic_uint in_use;
@@ -47,7 +57,7 @@ int nx_health_register(const char *name, uint32_t *out_id) {
     }
 
     nx_health_slot_t *slot = &g_slots[id];
-    memcpy(slot->name, name, n);
+    nx_copy(slot->name, name, n);
     slot->name[n] = '\0';
     atomic_store_explicit(&slot->state, (unsigned)NX_HEALTH_UNKNOWN, memory_order_relaxed);
     atomic_store_explicit(&slot->checks, 0u, memory_order_relaxed);
@@ -80,9 +90,9 @@ int nx_health_get(uint32_t id, nx_health_snapshot_t *out) {
     nx_health_slot_t *slot = &g_slots[id];
     if (!atomic_load_explicit(&slot->in_use, memory_order_acquire)) return -2;
 
-    memset(out, 0, sizeof(*out));
+    nx_zero(out, sizeof(*out));
     out->id = id;
-    memcpy(out->name, slot->name, sizeof(out->name));
+    nx_copy(out->name, slot->name, sizeof(out->name));
     out->state = (nx_health_state_t)atomic_load_explicit(&slot->state, memory_order_acquire);
     out->checks = atomic_load_explicit(&slot->checks, memory_order_relaxed);
     out->failures = atomic_load_explicit(&slot->failures, memory_order_relaxed);
@@ -104,7 +114,7 @@ size_t nx_health_snapshot_all(nx_health_snapshot_t *out, size_t capacity) {
 
 nx_health_summary_t nx_health_summarize(void) {
     nx_health_summary_t s;
-    memset(&s, 0, sizeof(s));
+    nx_zero(&s, sizeof(s));
     s.aggregate = NX_HEALTH_UNKNOWN;
 
     uint32_t count = atomic_load_explicit(&g_count, memory_order_acquire);
