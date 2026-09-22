@@ -1,0 +1,115 @@
+name: Nexora CI
+
+on:
+  push:
+    branches:
+      - master
+      - remediation/**
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexora-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase14-kernel:
+    name: Phase 14 kernel + QEMU
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kernel toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc binutils grub-pc-bin grub-common xorriso qemu-system-x86
+
+      - name: Host integration tests
+        run: make -C Nexora_Phase_14 test-host
+
+      - name: Freestanding kernel link
+        run: make -C Nexora_Phase_14 verify-phase14
+
+      - name: Build bootable ISO
+        run: make -C Nexora_Phase_14 all
+
+      - name: Headless QEMU boot smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="${RUNNER_TEMP}/nexora-qemu.log"
+          set +e
+          timeout 12s qemu-system-x86_64 \
+            -m 512M \
+            -smp 1 \
+            -cdrom Nexora_Phase_14/build/aikernel.iso \
+            -serial stdio \
+            -display none \
+            -no-reboot \
+            -no-shutdown >"$log" 2>&1
+          rc=$?
+          set -e
+          cat "$log"
+          if [[ $rc -ne 0 && $rc -ne 124 ]]; then
+            exit "$rc"
+          fi
+          grep -F "Nexora initialization complete." "$log"
+
+  phase15-bench:
+    name: Phase 15 benchmark tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: make -C Nexora_Phase_15 test
+
+  phase16-qualification:
+    name: Phase 16 qualification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit and validator tests
+        run: make -C Nexora_Phase_16 -f Makefile.phase16 test
+      - name: Deterministic qualification demo
+        run: make -C Nexora_Phase_16 -f Makefile.phase16 demo
+      - name: Sanitizers
+        run: make -C Nexora_Phase_16 -f Makefile.phase16 sanitize
+
+  phase17-hardening:
+    name: Phase 17 hardening gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Release gate
+        run: make -C Nexora_Phase_17 gate
+
+  pages-static:
+    name: Pages static validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Required Pages files
+        run: |
+          test -f docs/index.html
+          test -f docs/boot-sim.html
+          python3 - <<'PY'
+          from pathlib import Path
+          for p in (Path("docs/index.html"), Path("docs/boot-sim.html")):
+              text = p.read_text(encoding="utf-8")
+              assert "<html" in text.lower(), p
+              assert "</html>" in text.lower(), p
+          PY
