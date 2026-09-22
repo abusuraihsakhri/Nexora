@@ -23,8 +23,6 @@ struct nexora_percpu {
 };
 
 extern struct nexora_percpu nexora_bsp_percpu;
-extern uintptr_t nexora_syscall_kernel_rsp;
-extern uintptr_t nexora_syscall_user_rsp;
 
 static inline void nexora_percpu_init(struct nexora_percpu *cpu, u32 cpu_id, uintptr_t kernel_rsp) {
     if (!cpu) return;
