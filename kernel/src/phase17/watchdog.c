@@ -1,6 +1,10 @@
 #include "nexora/phase17/watchdog.h"
 
-#include <string.h>
+
+static void nx_zero(void *ptr, size_t n) {
+    unsigned char *p = (unsigned char *)ptr;
+    for (size_t i = 0; i < n; ++i) p[i] = 0;
+}
 
 static nx_watchdog_target_t g_targets[NX_WATCHDOG_MAX_TARGETS];
 
@@ -12,7 +16,7 @@ static int find_target(uint32_t component_id) {
 }
 
 void nx_watchdog_reset(void) {
-    memset(g_targets, 0, sizeof(g_targets));
+    nx_zero(g_targets, sizeof(g_targets));
 }
 
 int nx_watchdog_arm(uint32_t component_id, uint64_t timeout_ns, uint64_t now_ns) {
@@ -36,7 +40,7 @@ int nx_watchdog_arm(uint32_t component_id, uint64_t timeout_ns, uint64_t now_ns)
 int nx_watchdog_disarm(uint32_t component_id) {
     int idx = find_target(component_id);
     if (idx < 0) return -1;
-    memset(&g_targets[idx], 0, sizeof(g_targets[idx]));
+    nx_zero(&g_targets[idx], sizeof(g_targets[idx]));
     return 0;
 }
 
