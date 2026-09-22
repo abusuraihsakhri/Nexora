@@ -114,7 +114,7 @@ $(ISO): $(KERNEL) grub.cfg
 	@mkdir -p $(ISO_DIR)/boot/grub
 	cp $(KERNEL) $(ISO_DIR)/boot/kernel.elf
 	cp grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
-	grub-mkrescue -o $(ISO) $(ISO_DIR) >/dev/null 2>&1
+	grub-mkrescue -o $(ISO) $(ISO_DIR)
 	@echo "Built $(ISO)"
 
 $(HOST_TEST): $(HOST_TEST_SOURCES)
