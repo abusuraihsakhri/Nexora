@@ -1,373 +1,141 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nexora OS — Kernel Boot & Transition Simulation</title>
-  <style>
-    :root {
-      --bg: #0d1117;
-      --card-bg: #161b22;
-      --border: #30363d;
-      --text: #c9d1d9;
-      --heading: #f0f6fc;
-      --accent: #58a6ff;
-      --accent-green: #3fb950;
-      --accent-red: #f85149;
-      --accent-purple: #bc8cff;
-      --accent-yellow: #d29922;
-      --mono: "SFMono-Regular", Consolas, Menlo, monospace;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.6;
-      padding-bottom: 60px;
-    }
-    header {
-      background: #010409;
-      border-bottom: 1px solid var(--border);
-      padding: 20px 32px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-    .brand { display: flex; align-items: center; gap: 14px; }
-    .logo-badge {
-      background: linear-gradient(135deg, #1f6feb, #8957e5);
-      color: #fff;
-      font-weight: 700;
-      font-size: 16px;
-      padding: 6px 12px;
-      border-radius: 8px;
-    }
-    h1 { color: var(--heading); font-size: 20px; font-weight: 600; }
-    nav { display: flex; gap: 14px; }
-    nav a {
-      color: var(--text);
-      text-decoration: none;
-      font-size: 14px;
-      padding: 6px 12px;
-      border-radius: 6px;
-    }
-    nav a:hover, nav a.active {
-      background: var(--card-bg);
-      color: var(--accent);
-      border: 1px solid var(--border);
-    }
-    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
-    .sim-grid {
-      display: grid;
-      grid-template-columns: 1fr 340px;
-      gap: 24px;
-    }
-    @media (max-width: 900px) {
-      .sim-grid { grid-template-columns: 1fr; }
-    }
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 24px;
-    }
-    .controls {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-    .btn {
-      background: #21262d;
-      color: var(--heading);
-      border: 1px solid var(--border);
-      padding: 8px 18px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .btn:hover { background: #30363d; }
-    .btn-primary { background: #238636; border-color: rgba(240,246,252,0.1); color: #fff; }
-    .btn-primary:hover { background: #2ea043; }
-    .stages-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    .stage-item {
-      padding: 12px 16px;
-      background: #0d1117;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: all 0.2s;
-    }
-    .stage-item.active {
-      border-color: var(--accent);
-      background: #1f6feb15;
-    }
-    .stage-item.completed {
-      border-color: var(--accent-green);
-      opacity: 0.85;
-    }
-    .stage-name { font-weight: 600; color: var(--heading); font-size: 14px; }
-    .stage-badge {
-      font-family: var(--mono);
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 10px;
-      background: #21262d;
-      color: #8b949e;
-    }
-    .stage-item.active .stage-badge { background: var(--accent); color: #fff; }
-    .stage-item.completed .stage-badge { background: var(--accent-green); color: #fff; }
-    .log-window {
-      background: #010409;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 16px;
-      font-family: var(--mono);
-      font-size: 12px;
-      height: 220px;
-      overflow-y: auto;
-      color: #8b949e;
-      line-height: 1.5;
-    }
-    .log-line { margin-bottom: 4px; }
-    .log-line.info { color: #58a6ff; }
-    .log-line.success { color: #3fb950; }
-    .log-line.ring3 { color: #bc8cff; }
-    .reg-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-family: var(--mono);
-      font-size: 13px;
-      margin-top: 10px;
-    }
-    .reg-table td {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .reg-name { color: #8b949e; font-weight: 600; width: 40%; }
-    .reg-val { color: var(--accent); font-weight: 700; text-align: right; }
-    .cpl-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-weight: 700;
-      font-size: 12px;
-      margin-top: 14px;
-      text-align: center;
-      width: 100%;
-    }
-    .cpl-0 { background: #f8514922; color: var(--accent-red); border: 1px solid #f8514944; }
-    .cpl-3 { background: #3fb95022; color: var(--accent-green); border: 1px solid #3fb95044; }
-    footer { text-align: center; color: #484f58; font-size: 13px; margin-top: 48px; }
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive proof of the current Nexora-RK boot sequence.">
+  <title>NEXORA — Boot Proof</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cinzel:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Libre+Caslon+Text:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <div class="brand">
-      <div class="logo-badge">NEXORA</div>
-      <h1>NEXORA Kernel Boot &amp; Ring Transition Simulation</h1>
-    </div>
-    <nav>
-      <a href="index.html">Overview &amp; Spec</a>
-      <a href="boot-sim.html" class="active">Boot Simulation</a>
-      <a href="https://github.com/abusuraihsakhri/Nexora" target="_blank">GitHub Repo</a>
-    </nav>
-  </header>
+  <div class="site-shell">
+    <header class="topbar">
+      <div>
+        <div class="wordmark">NEXORA</div>
+        <div class="machine-label">Boot proof · x86-64 / QEMU / UP-only</div>
+      </div>
+      <nav class="nav" aria-label="Boot navigation">
+        <a href="index.html">Architecture</a>
+        <a href="https://github.com/abusuraihsakhri/Nexora/tree/master/kernel">Kernel source</a>
+      </nav>
+    </header>
 
-  <div class="container">
-    <div class="controls">
-      <button class="btn btn-primary" id="btnNext" onclick="stepSim()">Next Step &rarr;</button>
-      <button class="btn" id="btnPlay" onclick="toggleAutoPlay()">Auto Play</button>
-      <button class="btn" onclick="resetSim()">Reset</button>
-    </div>
+    <main>
+      <section class="masthead">
+        <div>
+          <div class="kicker">Execution ledger · current implementation</div>
+          <h1 style="font-size:clamp(3rem,8vw,6.5rem)">BOOT PROOF</h1>
+          <p class="deck">
+            A readable simulation of the sequence exercised by Nexora-RK. It is a documentation interface,
+            not a substitute for CI: the repository also performs a real headless QEMU boot smoke test.
+          </p>
+        </div>
+        <aside class="mast-note">
+          <span class="machine-label">Interpretation</span>
+          <p>
+            This proof stops where the current kernel stops. It does not invent a userspace process,
+            GPU execution, SMP startup, or timing data that the implementation does not yet provide.
+          </p>
+        </aside>
+      </section>
 
-    <div class="sim-grid">
-      <div class="card">
-        <h3 style="color: var(--heading); margin-bottom: 16px;">Execution Stages (Milestones M1–M6)</h3>
-        <div class="stages-list" id="stagesList">
-          <!-- Stages rendered by JS -->
+      <section class="section" style="padding-top:36px">
+        <div class="section-head">
+          <div class="section-number">01 · SEQUENCE</div>
+          <div>
+            <h2>From firmware handoff to a validated research kernel.</h2>
+            <p class="section-lede">Select a stage or run the sequence. Each entry corresponds to a real initialization responsibility in the active kernel tree.</p>
+          </div>
         </div>
 
-        <h4 style="color: var(--heading); margin: 20px 0 10px 0; font-size: 14px;">Console & Tracing Telemetry</h4>
-        <div class="log-window" id="logWindow">
-          <div class="log-line info">[BOOT] Nexora kernel initialization initialized.</div>
+        <div class="paper proof" style="max-width:none">
+          <div class="ornament-frame" style="text-align:left">
+            <div class="charter-sub">Execution folio · NX-BOOT-0001</div>
+            <div class="progress-rule" aria-hidden="true"><span id="progressBar"></span></div>
+            <div class="boot-layout">
+              <div>
+                <div class="boot-steps" id="bootSteps" aria-label="Boot stages"></div>
+                <div class="button-row">
+                  <button class="btn primary" id="runBtn" type="button">Run sequence</button>
+                  <button class="btn" id="stepBtn" type="button">Step</button>
+                  <button class="btn" id="resetBtn" type="button">Reset</button>
+                </div>
+              </div>
+              <div>
+                <div class="terminal" id="terminal" role="log" aria-live="polite" aria-label="Nexora boot output">
+                  <span class="muted">NEXORA boot proof ready.</span><br>
+                  <span class="muted">Choose “Run sequence” or select a stage.</span>
+                </div>
+              </div>
+            </div>
+            <div class="charter-meta">
+              <span>Mode · documentation simulation</span>
+              <span>Validated target · qemu-system-x86_64</span>
+              <span>CPU count · 1</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div class="card">
-        <h3 style="color: var(--heading); margin-bottom: 14px;">CPU Architectural State</h3>
-        <div id="cplDisplay" class="cpl-badge cpl-0">Privilege: Ring 0 (Kernel)</div>
+      <section class="section">
+        <div class="section-head">
+          <div class="section-number">02 · READING</div>
+          <div>
+            <h2>What success means at this stage.</h2>
+            <p class="section-lede">
+              A successful boot demonstrates that the supported kernel image links, enters long mode,
+              initializes the current substrate, executes its internal validation path, and reaches its terminal halt state.
+              It does not by itself validate performance or production-grade isolation.
+            </p>
+          </div>
+        </div>
+        <div class="grid-3">
+          <article class="card">
+            <div class="index-label">Proves</div>
+            <h3>Boot coherence</h3>
+            <p>The current build can traverse the supported initialization sequence under QEMU without a fatal regression.</p>
+          </article>
+          <article class="card">
+            <div class="index-label">Does not prove</div>
+            <h3>Accelerator execution</h3>
+            <p>GPU/NPU resource classes are architectural semantics; real device execution is not part of this boot proof.</p>
+          </article>
+          <article class="card">
+            <div class="index-label">Next proof</div>
+            <h3>User VM + clock</h3>
+            <p>A real monotonic clock and protected user address spaces are prerequisites for the next class of measurements.</p>
+          </article>
+        </div>
+      </section>
 
-        <table class="reg-table">
-          <tr><td class="reg-name">RIP</td><td class="reg-val" id="regRIP">0x00100000</td></tr>
-          <tr><td class="reg-name">RSP</td><td class="reg-val" id="regRSP">0x00200000</td></tr>
-          <tr><td class="reg-name">CS / SS</td><td class="reg-val" id="regCS">0x08 / 0x10</td></tr>
-          <tr><td class="reg-name">GS Base</td><td class="reg-val" id="regGS">0x00000000</td></tr>
-          <tr><td class="reg-name">User RSP</td><td class="reg-val" id="regUserRSP">0x00000000</td></tr>
-          <tr><td class="reg-name">GDT / TSS</td><td class="reg-val" id="regGDT">Unset</td></tr>
-          <tr><td class="reg-name">IDT</td><td class="reg-val" id="regIDT">Unset</td></tr>
-          <tr><td class="reg-name">Heap Watermark</td><td class="reg-val" id="regHeap">0 KB</td></tr>
-        </table>
-      </div>
-    </div>
+      <section class="section">
+        <div class="paper proof">
+          <div class="ornament-frame">
+            <div class="charter-sub">Validation memorandum</div>
+            <div class="charter-title" style="font-size:clamp(1.8rem,4vw,3.5rem)">No invented success states</div>
+            <p class="charter-copy">
+              Nexora's documentation follows the same rule as its release gate: a claim should be backed by an implementation surface
+              and an executable check. Planned mechanisms remain visibly planned.
+            </p>
+            <div class="seal"><span>BOOT<br>PROOF</span></div>
+            <div class="charter-meta">
+              <span>Document · NX-MEMO-BOOT</span>
+              <span>Revision · 0.1</span>
+              <span>Authority · repository CI</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div><div class="wordmark">NEXORA</div><div>Boot documentation for the active research kernel.</div></div>
+      <div class="machine-label"><a href="index.html">Return to architecture</a></div>
+    </footer>
   </div>
-
-  <footer>
-    NEXORA Kernel State Machine Simulation &bull; 2026
-  </footer>
-
-  <script>
-    const stages = [
-      {
-        name: "Stage 0: Early Boot & Multiboot2",
-        cpl: 0, rip: "0x00100000", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0x00000000", userRsp: "0x00000000",
-        gdt: "Early", idt: "Early", heap: "0 KB",
-        log: "[M0] Long mode enabled. Multiboot2 memory tags detected."
-      },
-      {
-        name: "Stage 1 (M1): Buddy Frame Allocator",
-        cpl: 0, rip: "0x00102400", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0x00000000", userRsp: "0x00000000",
-        gdt: "Early", idt: "Early", heap: "16 KB (Bitmap)",
-        log: "[M1] Physical frame allocator initialized over memory map. Monotonic 1 MiB bump replaced."
-      },
-      {
-        name: "Stage 2 (M2): Kernel Slab Heap & AI Caches",
-        cpl: 0, rip: "0x00104800", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0x00000000", userRsp: "0x00000000",
-        gdt: "Early", idt: "Early", heap: "128 KB (Slab Ready)",
-        log: "[M2] Slab caches initialized for ai_tensor and ai_work_node. Bounded reclamation active."
-      },
-      {
-        name: "Stage 3 (M3): Privilege Boundary (GDT, TSS, IDT, %gs)",
-        cpl: 0, rip: "0x00106200", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0xFFFF800000010000", userRsp: "0x00000000",
-        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "128 KB",
-        log: "[M3] GDT64, TSS rsp0, IDT, and per-CPU GS initialized via IA32_KERNEL_GS_BASE (0xC0000102)."
-      },
-      {
-        name: "Stage 4 (M4): Load Userspace ELF64",
-        cpl: 0, rip: "0x00108A00", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0xFFFF800000010000", userRsp: "0x00000000",
-        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "160 KB",
-        log: "[M4] ELF64 verified: pairwise PT_LOAD overlap check PASS, W^X PASS. Mapped to user space."
-      },
-      {
-        name: "Stage 5 (M4): Context Switch to Userspace (Ring 3)",
-        cpl: 3, rip: "0x00400000", rsp: "0x007FFFF0", cs: "0x23 / 0x1b", gs: "User GS", userRsp: "0x007FFFF0",
-        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "160 KB",
-        log: "[RING3] sysretq/iretq executed! Userspace application executing in Ring 3."
-      },
-      {
-        name: "Stage 6: System Call (swapgs & %gs Per-CPU Entry)",
-        cpl: 0, rip: "0x0010A000", rsp: "0x00200000", cs: "0x08 / 0x10", gs: "0xFFFF800000010000", userRsp: "0x007FFFF0",
-        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "160 KB",
-        log: "[SYSCALL] SYSCALL #1 (ai_tensor_create) entered. swapgs saved user RSP into %gs:8. Isolated stack."
-      },
-      {
-        name: "Stage 7: Return to Userspace (Canonical Check & sysretq)",
-        cpl: 3, rip: "0x00400020", rsp: "0x007FFFF0", cs: "0x23 / 0x1b", gs: "User GS", userRsp: "0x007FFFF0",
-        gdt: "0x28 (TSS)", idt: "Installed (256)", heap: "164 KB",
-        log: "[RETURN] Canonical RIP validated: bits 47..63 == 0. swapgs & sysretq returned cleanly to Ring 3."
-      }
-    ];
-
-    let currentStage = 0;
-    let autoPlayTimer = null;
-
-    function renderStages() {
-      const container = document.getElementById('stagesList');
-      container.innerHTML = stages.map((s, idx) => `
-        <div class="stage-item ${idx === currentStage ? 'active' : ''} ${idx < currentStage ? 'completed' : ''}">
-          <span class="stage-name">${s.name}</span>
-          <span class="stage-badge">${idx < currentStage ? 'DONE' : (idx === currentStage ? 'ACTIVE' : 'PENDING')}</span>
-        </div>
-      `).join('');
-    }
-
-    function updateDisplay() {
-      const s = stages[currentStage];
-      document.getElementById('regRIP').textContent = s.rip;
-      document.getElementById('regRSP').textContent = s.rsp;
-      document.getElementById('regCS').textContent = s.cs;
-      document.getElementById('regGS').textContent = s.gs;
-      document.getElementById('regUserRSP').textContent = s.userRsp;
-      document.getElementById('regGDT').textContent = s.gdt;
-      document.getElementById('regIDT').textContent = s.idt;
-      document.getElementById('regHeap').textContent = s.heap;
-
-      const cplEl = document.getElementById('cplDisplay');
-      if (s.cpl === 0) {
-        cplEl.className = 'cpl-badge cpl-0';
-        cplEl.textContent = 'Privilege: Ring 0 (Kernel Supervisor)';
-      } else {
-        cplEl.className = 'cpl-badge cpl-3';
-        cplEl.textContent = 'Privilege: Ring 3 (Unprivileged Userspace)';
-      }
-
-      const logWin = document.getElementById('logWindow');
-      const line = document.createElement('div');
-      line.className = 'log-line ' + (s.cpl === 3 ? 'ring3' : (currentStage > 0 ? 'success' : 'info'));
-      line.textContent = s.log;
-      logWin.appendChild(line);
-      logWin.scrollTop = logWin.scrollHeight;
-
-      renderStages();
-    }
-
-    function stepSim() {
-      if (currentStage < stages.length - 1) {
-        currentStage++;
-        updateDisplay();
-      } else {
-        stopAutoPlay();
-      }
-    }
-
-    function toggleAutoPlay() {
-      if (autoPlayTimer) {
-        stopAutoPlay();
-      } else {
-        document.getElementById('btnPlay').textContent = 'Pause';
-        autoPlayTimer = setInterval(() => {
-          if (currentStage < stages.length - 1) {
-            stepSim();
-          } else {
-            stopAutoPlay();
-          }
-        }, 1500);
-      }
-    }
-
-    function stopAutoPlay() {
-      if (autoPlayTimer) {
-        clearInterval(autoPlayTimer);
-        autoPlayTimer = null;
-        document.getElementById('btnPlay').textContent = 'Auto Play';
-      }
-    }
-
-    function resetSim() {
-      stopAutoPlay();
-      currentStage = 0;
-      document.getElementById('logWindow').innerHTML = '<div class="log-line info">[BOOT] Nexora kernel simulation initialized.</div>';
-      updateDisplay();
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      renderStages();
-      updateDisplay();
-    });
-  </script>
+  <script src="boot-sim.js"></script>
 </body>
 </html>
