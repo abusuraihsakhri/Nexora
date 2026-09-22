@@ -147,7 +147,7 @@ phase14-report: $(HOST_REPORT)
 verify-phase14: test-host $(KERNEL)
 	@echo "Phase 14 baseline tests and freestanding kernel link passed."
 
-verify-current: verify-phase14
+verify-current: verify-phase14 check
 	@echo "Integrated Nexora kernel (Phases 14-17) verified."
 
 run: $(ISO)
