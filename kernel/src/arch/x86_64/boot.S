@@ -11,8 +11,8 @@
 .set MB2_HEADER_LEN,  multiboot_header_end - multiboot_header
 .set MB2_CHECKSUM,    -(MB2_MAGIC + MB2_ARCH + MB2_HEADER_LEN)
 
-.section .multiboot_header
-.align 8
+.section .multiboot_header,"a"
+.balign 8
 multiboot_header:
     .long MB2_MAGIC
     .long MB2_ARCH
