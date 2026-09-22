@@ -18,91 +18,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  phase14-kernel:
-    name: Phase 14 kernel + QEMU
+  kernel:
+    name: Integrated kernel + QEMU
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
       - name: Install kernel toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gcc binutils grub-pc-bin grub-common xorriso qemu-system-x86
-
-      - name: Host integration tests
-        run: make -C Nexora_Phase_14 test-host
-
-      - name: Freestanding kernel link
-        run: make -C Nexora_Phase_14 verify-phase14
-
+      - name: Host and freestanding verification
+        run: make -C kernel verify-current
       - name: Build bootable ISO
-        run: make -C Nexora_Phase_14 all
-
-      - name: Headless QEMU boot smoke test
+        run: make -C kernel all
+      - name: Headless QEMU smoke test
         shell: bash
         run: |
           set -euo pipefail
           log="${RUNNER_TEMP}/nexora-qemu.log"
           set +e
           timeout 12s qemu-system-x86_64 \
-            -m 512M \
-            -smp 1 \
-            -cdrom Nexora_Phase_14/build/aikernel.iso \
-            -serial stdio \
-            -display none \
-            -no-reboot \
-            -no-shutdown >"$log" 2>&1
+            -m 512M -smp 1 \
+            -cdrom kernel/build/aikernel.iso \
+            -serial stdio -display none -no-reboot -no-shutdown >"$log" 2>&1
           rc=$?
           set -e
           cat "$log"
-          if [[ $rc -ne 0 && $rc -ne 124 ]]; then
-            exit "$rc"
-          fi
+          if [[ $rc -ne 0 && $rc -ne 124 ]]; then exit "$rc"; fi
           grep -F "Nexora initialization complete." "$log"
 
-  phase15-bench:
-    name: Phase 15 benchmark tooling
+  bench:
+    name: Benchmark contract
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: make -C Nexora_Phase_15 test
+        with: { python-version: "3.12" }
+      - run: make -C bench test
 
-  phase16-qualification:
-    name: Phase 16 qualification
+  qualification:
+    name: Qualification + sanitizers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Unit and validator tests
-        run: make -C Nexora_Phase_16 -f Makefile.phase16 test
-      - name: Deterministic qualification demo
-        run: make -C Nexora_Phase_16 -f Makefile.phase16 demo
-      - name: Sanitizers
-        run: make -C Nexora_Phase_16 -f Makefile.phase16 sanitize
+        with: { python-version: "3.12" }
+      - run: make -C qualification test
+      - run: make -C qualification demo
+      - run: make -C qualification sanitize
 
-  phase17-hardening:
-    name: Phase 17 hardening gate
+  release:
+    name: Release hardening gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Release gate
-        run: make -C Nexora_Phase_17 gate
+        with: { python-version: "3.12" }
+      - run: make -C release gate
 
-  pages-static:
+  pages:
     name: Pages static validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Required Pages files
+      - name: Validate HTML documents
         run: |
           test -f docs/index.html
           test -f docs/boot-sim.html
@@ -110,6 +90,8 @@ jobs:
           from pathlib import Path
           for p in (Path("docs/index.html"), Path("docs/boot-sim.html")):
               text = p.read_text(encoding="utf-8")
-              assert "<html" in text.lower(), p
-              assert "</html>" in text.lower(), p
+              low = text.lower()
+              assert "<!doctype html" in low, p
+              assert "<html" in low and "</html>" in low, p
+              assert "<meta name=\"viewport\"" in low, p
           PY
