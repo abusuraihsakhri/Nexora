@@ -159,7 +159,7 @@ static nexora_status_t sys_tensor_release(struct nexora_process *process,
     void *object = NULL;
     nexora_status_t status = nexora_handle_resolve(&process->handles,
         (nexora_handle_t)handle_value, NEXORA_HANDLE_TENSOR,
-        0, &object, NULL);
+        NEXORA_RIGHT_RELEASE, &object, NULL);
     if (status != NEXORA_OK) return status;
     status = ops->tensor_release(process, object);
     if (status != NEXORA_OK) return status;
