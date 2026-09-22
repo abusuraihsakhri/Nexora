@@ -138,7 +138,7 @@ bool ai_tensor_validate(const ai_tensor *tensor) {
     if (tensor->ndim == 0 || tensor->ndim > AI_MAX_DIMS) return false;
     if (dtype_size(tensor->dtype) == 0) return false;
     if ((u32)tensor->location > (u32)AI_LOC_REMOTE) return false;
-    if (tensor->bytes == 0) return false;
+    if (tensor->bytes == 0 || tensor->refcount == 0) return false;
     for (u32 i = 0; i < tensor->ndim; ++i) {
         if (tensor->shape[i] == 0) return false;
     }
