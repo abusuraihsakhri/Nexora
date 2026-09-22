@@ -1,7 +1,7 @@
 .PHONY: test fixture summarize clean
 
 test:
-	./scripts/selftest.sh
+	bash scripts/selftest.sh
 
 fixture:
 	python3 tools/generate_fixture.py
