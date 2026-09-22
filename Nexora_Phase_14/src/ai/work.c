@@ -42,6 +42,7 @@ i32 ai_work_add_safe(
     node->priority = priority;
     node->deadline_ns = deadline_ns;
     node->device_mask = device_mask;
+    node->refcount = 1;
     node->dependency_count = 0;
     node->input_count = 0;
     node->output_count = 0;
@@ -87,6 +88,7 @@ void ai_work_add_dependency(ai_work_node *node, u64 dependency_id) {
 i32 ai_work_add_input_safe(ai_work_node *node, ai_tensor *tensor) {
     if (!node || !tensor) return -1;
     if (node->input_count >= AI_MAX_INPUTS) return -2;
+    if (!ai_tensor_retain(tensor)) return -3;
     node->inputs[node->input_count++] = tensor;
     return 0;
 }
@@ -100,6 +102,7 @@ void ai_work_add_input(ai_work_node *node, ai_tensor *tensor) {
 i32 ai_work_add_output_safe(ai_work_node *node, ai_tensor *tensor) {
     if (!node || !tensor) return -1;
     if (node->output_count >= AI_MAX_OUTPUTS) return -2;
+    if (!ai_tensor_retain(tensor)) return -3;
     node->outputs[node->output_count++] = tensor;
     return 0;
 }
@@ -288,8 +291,17 @@ const char *ai_op_name(ai_op op) {
     }
 }
 
+bool ai_work_node_retain(ai_work_node *node) {
+    if (!node || node->refcount == 0 || node->refcount == ~0u) return false;
+    node->refcount++;
+    return true;
+}
+
 void ai_work_node_destroy(ai_work_graph *graph, ai_work_node *node) {
-    if (!node) return;
+    if (!node || node->refcount == 0) return;
+    node->refcount--;
+    if (node->refcount != 0) return;
+
     if (graph) {
         for (u32 i = 0; i < graph->node_count; ++i) {
             if (graph->nodes[i] == node) {
@@ -301,6 +313,20 @@ void ai_work_node_destroy(ai_work_graph *graph, ai_work_node *node) {
             }
         }
     }
+
+    for (u32 i = 0; i < node->input_count; ++i) {
+        if (node->inputs[i]) {
+            ai_tensor_destroy(node->inputs[i]);
+            node->inputs[i] = NULL;
+        }
+    }
+    for (u32 i = 0; i < node->output_count; ++i) {
+        if (node->outputs[i]) {
+            ai_tensor_destroy(node->outputs[i]);
+            node->outputs[i] = NULL;
+        }
+    }
+
     if (ai_work_node_cache) {
         kmem_cache_free(ai_work_node_cache, node);
     }
@@ -308,13 +334,27 @@ void ai_work_node_destroy(ai_work_graph *graph, ai_work_node *node) {
 
 void ai_work_graph_destroy(ai_work_graph *graph) {
     if (!graph) return;
-    for (u32 i = 0; i < graph->node_count; ++i) {
-        if (graph->nodes[i]) {
-            if (ai_work_node_cache) {
-                kmem_cache_free(ai_work_node_cache, graph->nodes[i]);
+    while (graph->node_count > 0) {
+        ai_work_node *node = graph->nodes[0];
+        if (!node) {
+            for (u32 i = 0; i + 1 < graph->node_count; ++i) {
+                graph->nodes[i] = graph->nodes[i + 1];
             }
-            graph->nodes[i] = NULL;
+            graph->nodes[--graph->node_count] = NULL;
+            continue;
+        }
+        ai_work_node_destroy(graph, node);
+        if (node->refcount != 0) {
+            /* External handles still retain this object; remove graph ownership. */
+            for (u32 i = 0; i < graph->node_count; ++i) {
+                if (graph->nodes[i] == node) {
+                    for (u32 j = i; j + 1 < graph->node_count; ++j) {
+                        graph->nodes[j] = graph->nodes[j + 1];
+                    }
+                    graph->nodes[--graph->node_count] = NULL;
+                    break;
+                }
+            }
         }
     }
-    graph->node_count = 0;
 }
