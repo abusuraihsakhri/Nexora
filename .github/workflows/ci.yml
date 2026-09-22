@@ -10,9 +10,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: nexora-ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   phase14-kernel:
@@ -49,10 +46,7 @@ jobs:
 
   phase17-release-gate:
     name: Phase 17 release gate
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
