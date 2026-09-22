@@ -1,177 +1,98 @@
-# AIKernel Starter
+# Nexora-RK
 
-A small **x86-64 experimental research kernel** intended as a foundation for exploring AI-native operating-system abstractions.
+Nexora-RK is the bare-metal research-kernel implementation of **NEXORA — Neural EXecution Orchestration and Resource Architecture**.
 
-This is deliberately **not a Linux clone**. The initial design treats these as first-class concepts:
+It exists to test one narrow research hypothesis: whether exposing AI workload semantics to the operating-system resource manager can improve scheduling, memory use, locality, isolation, and accelerator utilization.
 
-- tensors and their placement/lifetime metadata
-- AI work units and dependency graphs
-- heterogeneous compute targets (CPU/GPU/NPU)
-- capability-based access control
-- deadline/priority-aware scheduling
-- data locality as an explicit concern
+## Current scope
 
-The current version is a bootable research skeleton. It does **not** yet run real GPU/NPU kernels.
+The current kernel is an **x86-64, QEMU-first, uniprocessor research system**. It is intentionally small and explicit about what is simulated.
 
-> **Execution scope:** v0.1 is intentionally **uniprocessor (UP-only)**. Global allocator,
-> process, graph, and registry state is not advertised as SMP-safe. QEMU is therefore
-> run with one virtual CPU until AP startup, per-CPU ownership, and synchronization are
-> implemented and validated.
+Implemented and build-validated surfaces include:
 
-## What already works
+- Multiboot2 boot through GRUB and transition to x86-64 long mode;
+- early paging, VGA/serial diagnostics, and panic handling;
+- frame and slab allocation for kernel objects;
+- GDT/TSS, IDT, syscall MSRs, and a capability-aware syscall dispatch layer;
+- ELF64 structural validation and host-side Ring-3 ABI tests;
+- typed tensor metadata with overflow checks and reference-counted ownership;
+- work graphs, dependency validation, deterministic scheduling, and deadlock reporting;
+- generation-tagged handles and constrained capability delegation;
+- Phase 16 telemetry, fault injection, and release-health modules;
+- Phase 17 health, trace, watchdog, and build-information modules;
+- host regression tests, sanitizers, and headless QEMU boot validation in CI.
 
-- Multiboot2 boot through GRUB
-- transition from 32-bit GRUB entry to x86-64 long mode
-- 1 GiB identity mapping using 2 MiB pages
-- VGA text output
-- COM1 serial output
-- panic primitive
-- tiny bump allocator
-- tensor registry
-- work-graph representation
-- capability objects
-- simple priority/dependency scheduler
-- demonstration graph created during kernel boot
+## Deliberate limits
 
-## Project layout
+Nexora-RK v0.1 does **not** currently claim:
 
-```text
-aikernel-starter/
-├── Makefile
-├── linker.ld
-├── grub.cfg
-├── include/
-│   ├── ai/
-│   │   ├── capability.h
-│   │   ├── device.h
-│   │   ├── scheduler.h
-│   │   ├── tensor.h
-│   │   └── work.h
-│   └── kernel/
-│       ├── memory.h
-│       ├── panic.h
-│       ├── printk.h
-│       └── types.h
-├── src/
-│   ├── ai/
-│   ├── arch/x86_64/
-│   ├── kernel/
-│   └── mm/
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── DESIGN_PRINCIPLES.md
-│   └── ROADMAP.md
-└── scripts/
-    ├── debug.sh
-    └── run.sh
-```
+- SMP safety or application-processor startup;
+- real GPU/NPU kernel execution;
+- a production virtual-memory subsystem for user processes;
+- tensor userspace mapping — `NEXORA_SYS_AI_TENSOR_MAP` returns `ENOSYS` until a real VM-backed mapping exists;
+- production Ring-3 process launch from the boot path;
+- preemptive/asynchronous device scheduling;
+- calibrated kernel timestamps where no monotonic clock source has been wired;
+- physical-page reclamation from fully free slab pages.
 
-## Recommended build environment
+These are engineering boundaries, not hidden TODOs. Measurements and claims should be interpreted within them.
 
-A Debian/Ubuntu/Kali-like Linux system or WSL2.
+## Build and verify
 
-Install:
+On Debian/Ubuntu-like systems:
 
 ```bash
 sudo apt update
 sudo apt install build-essential gcc binutils grub-pc-bin grub-common \
-    xorriso qemu-system-x86 gdb
+  xorriso qemu-system-x86 gdb
 ```
 
-## Build
+Run the active verification gate:
+
+```bash
+make verify-current
+```
+
+Build the bootable image:
 
 ```bash
 make
 ```
 
-The build creates:
-
-```text
-build/kernel.elf
-build/aikernel.iso
-```
-
-## Run in QEMU
+Run in QEMU:
 
 ```bash
 make run
 ```
 
-or:
+The v0.1 QEMU configuration deliberately uses one virtual CPU.
 
-```bash
-./scripts/run.sh
-```
-
-Expected serial output includes:
+## Source layout
 
 ```text
-AIKernel x86_64 booted.
-Early heap initialized.
-AI runtime metadata initialized.
-
-[AIKernel demo]
-tensor input: ...
-tensor weights: ...
-work node 1: READY
-work node 2: BLOCKED
-scheduler selected node 1
-...
-AIKernel initialization complete.
-```
-
-## Debug
-
-Terminal 1:
-
-```bash
-make debug
-```
-
-Terminal 2:
-
-```bash
-gdb build/kernel.elf
-(gdb) target remote :1234
-(gdb) break kmain
-(gdb) continue
-```
-
-## Clean
-
-```bash
-make clean
+include/
+  ai/                 semantic AI objects + qualification APIs
+  kernel/             low-level kernel interfaces
+  nexora/             syscall ABI, handles, processes, Phase 17 interfaces
+src/
+  ai/                 tensors, work graphs, scheduler, telemetry
+  arch/x86_64/        boot, GDT/TSS, IDT, syscalls, user transition
+  kernel/             syscall/process/backend/ELF mechanisms
+  mm/                 early, frame, and slab allocators
+  phase17/            health, tracing, watchdog, build identity
+tests/                hosted regression/integration tests
+docs/                 architecture, research roadmap, limitations
 ```
 
 ## Research direction
 
-The first serious experiments should compare an AI-native primitive with a conventional Linux implementation. Good early candidates:
+The next kernel work should prioritize mechanisms needed to test Nexora's hypotheses, not general-purpose OS breadth:
 
-1. tensor-aware allocator vs generic allocation
-2. graph scheduler vs independent task queue
-3. explicit tensor lifetime reclamation
-4. topology-aware placement simulation
-5. zero-copy shared tensor handles
-6. capability-based agent resource access
+1. a real monotonic clock and measured scheduling latency;
+2. VM-backed tensor storage and protected userspace mappings;
+3. explicit graph-derived tensor lifetime reclamation;
+4. a simulated/virtio-style accelerator with asynchronous completion;
+5. topology-aware placement;
+6. only after those are stable, SMP and real accelerator backends.
 
-Do **not** attempt GPU-driver development first. Prove one architectural advantage before expanding hardware support.
-
-See `docs/ROADMAP.md`.
-
-## Phase 14 validation commands
-
-The Phase 14 branch adds a host-side integration/stress harness that does not require
-GRUB or QEMU:
-
-```bash
-make test-host
-```
-
-To run the host suite and also compile/link the freestanding kernel:
-
-```bash
-make verify-phase14
-```
-
-The boot path also runs the Phase 14 self-test and panics if the validation gate fails.
-See `docs/PHASE14.md` and `docs/PHASE14_TEST_REPORT.md`.
+See `docs/ARCHITECTURE.md`, `docs/KNOWN_LIMITATIONS.md`, and the repository root specification.
