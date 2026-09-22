@@ -1,9 +1,6 @@
 .section .text
 .code64
 .global nexora_syscall_entry
-.global nexora_bsp_percpu
-.global nexora_syscall_kernel_rsp
-.global nexora_syscall_user_rsp
 .extern nexora_syscall_dispatch_frame
 .extern nexora_syscall_bad_rip_fault
 
@@ -13,9 +10,12 @@
  *   rdi,rsi,rdx,r10,r8,r9 = arguments 0..5
  *   rax = signed result
  *
- * Utilizes swapgs to address per-CPU stack storage via the %gs segment:
+ * swapgs selects the C-defined per-CPU structure through IA32_KERNEL_GS_BASE:
  *   %gs:0 = kernel_rsp
  *   %gs:8 = user_rsp
+ *
+ * The per-CPU object has exactly one storage definition, in syscall_msr.c.
+ * Keeping storage out of this assembly file avoids duplicate linker symbols.
  */
 nexora_syscall_entry:
     swapgs
@@ -40,10 +40,8 @@ nexora_syscall_entry:
     addq $8, %rsp
 
     /*
-     * Security check: Return RIP (at 64(%rsp)) must be a canonical user address.
-     * On Intel CPUs, executing SYSRET with a non-canonical RCX causes a #GP
-     * fault in Ring 0 with user stack/state (CVE-2012-0217).
-     * Lower half canonical user space requires bits 47..63 to be 0.
+     * Security check: Return RIP (at 64(%rsp)) must be a canonical lower-half
+     * user address. SYSRET with a non-canonical RCX may fault in Ring 0.
      */
     movq 64(%rsp), %rcx
     movq %rcx, %rax
@@ -51,9 +49,8 @@ nexora_syscall_entry:
     jnz .Lsyscall_sysret_non_canonical
 
     /*
-     * Preserve all syscall argument registers across the transition.  The
-     * userspace wrapper only declares RCX/R11 as architectural clobbers, so
-     * returning the argument registers prevents a compiler/kernel ABI mismatch.
+     * Preserve syscall argument registers across the transition. The userspace
+     * wrapper declares only RCX/R11 as architectural clobbers.
      */
     movq 0(%rsp), %r9
     movq 8(%rsp), %r8
@@ -70,22 +67,16 @@ nexora_syscall_entry:
     sysretq
 
 .Lsyscall_sysret_non_canonical:
-    /* Keep frame on stack and invoke safe kernel fault handler */
+    /*
+     * Do not attempt SYSRET. Mark the current process dead and remain in the
+     * kernel. A scheduler/process-exit path can replace this terminal loop once
+     * Nexora grows runnable user processes.
+     */
     movq %rsp, %rdi
     subq $8, %rsp
     call nexora_syscall_bad_rip_fault
     addq $8, %rsp
 1:
+    cli
     hlt
     jmp 1b
-
-.section .data
-.align 16
-nexora_bsp_percpu:
-nexora_syscall_kernel_rsp:
-    .quad 0
-nexora_syscall_user_rsp:
-    .quad 0
-    .long 0
-    .long 0
-    .quad 0, 0, 0, 0
