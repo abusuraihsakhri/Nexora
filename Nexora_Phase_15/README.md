@@ -1,6 +1,6 @@
 # Nexora Phase 15 — Performance Validation & Regression Gates
 
-Phase 15 turns the integrated Nexora kernel into a measurable research system. It adds a host-side benchmark pipeline, a stable JSONL event contract, regression thresholds, statistical summaries, and a narrow kernel adapter for emitting benchmark events.
+Phase 15 provides benchmark and regression-gate tooling intended to make the Nexora research system measurable. It adds a host-side benchmark pipeline, a stable JSONL event contract, regression thresholds, descriptive statistical summaries, and a narrow kernel adapter for emitting benchmark events.
 
 > Integration note: this package is intentionally additive. The current chat did not contain the Phase 14 source archive, so the kernel-facing adapter does not assume undocumented Phase 14 APIs. Bind `nx_bench_now_ns()` and `nx_bench_write()` to the Phase 14 monotonic clock and serial/log sink when merging.
 
@@ -13,7 +13,7 @@ Phase 15 turns the integrated Nexora kernel into a measurable research system. I
 - measure local vs distributed/remote-resource path overhead
 - produce median, p95, p99, min, max, mean and sample count
 - compare candidate results with a locked baseline
-- fail on statistically material regressions using explicit thresholds
+- fail on threshold-defined regressions using explicit, version-controlled limits
 - keep raw events for reproducibility
 
 ## Quick start
