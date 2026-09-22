@@ -343,9 +343,10 @@ void ai_work_graph_destroy(ai_work_graph *graph) {
             graph->nodes[--graph->node_count] = NULL;
             continue;
         }
+        const u32 refs_before = node->refcount;
         ai_work_node_destroy(graph, node);
-        if (node->refcount != 0) {
-            /* External handles still retain this object; remove graph ownership. */
+        if (refs_before > 1) {
+            /* External handles still retain this object; detach it from the graph. */
             for (u32 i = 0; i < graph->node_count; ++i) {
                 if (graph->nodes[i] == node) {
                     for (u32 j = i; j + 1 < graph->node_count; ++j) {
