@@ -8,3 +8,13 @@
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Python/cache output
+__pycache__/
+*.py[cod]
+
+# Generated diagnostics and binaries
+*.log
+*.elf
+**/step_archives/
+**/history/*.zip
