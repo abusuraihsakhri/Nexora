@@ -28,6 +28,7 @@ enum nexora_errno {
     NEXORA_EINVAL      = 22,
     NEXORA_ENOSPC      = 28,
     NEXORA_ENOSYS      = 38,
+    NEXORA_EOVERFLOW   = 75,
     NEXORA_ETIMEDOUT   = 110,
     NEXORA_ESTALE      = 116,
 };
