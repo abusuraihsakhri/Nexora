@@ -1,655 +1,244 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="NEXORA — Neural EXecution Orchestration and Resource Architecture. An AI-native operating-system research architecture.">
   <title>NEXORA — Neural EXecution Orchestration and Resource Architecture</title>
-  <style>
-    :root {
-      --bg: #0d1117;
-      --card-bg: #161b22;
-      --card-sub: #0f141c;
-      --border: #30363d;
-      --text: #c9d1d9;
-      --heading: #f0f6fc;
-      --accent: #58a6ff;
-      --accent-green: #3fb950;
-      --accent-red: #f85149;
-      --accent-purple: #bc8cff;
-      --accent-yellow: #d29922;
-      --accent-cyan: #39c5cf;
-      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      line-height: 1.6;
-      padding-bottom: 60px;
-    }
-    header {
-      background: #010409;
-      border-bottom: 1px solid var(--border);
-      padding: 22px 32px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-    .logo-badge {
-      background: linear-gradient(135deg, #1f6feb, #8957e5);
-      color: #fff;
-      font-weight: 800;
-      font-size: 18px;
-      padding: 6px 14px;
-      border-radius: 8px;
-      letter-spacing: 1.5px;
-    }
-    .brand-title {
-      display: flex;
-      flex-direction: column;
-    }
-    .brand-title h1 {
-      color: var(--heading);
-      font-size: 19px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-    }
-    .brand-title span {
-      color: #8b949e;
-      font-size: 12px;
-      letter-spacing: 0.2px;
-    }
-    nav { display: flex; gap: 12px; }
-    nav a {
-      color: var(--text);
-      text-decoration: none;
-      font-size: 13.5px;
-      padding: 6px 14px;
-      border-radius: 6px;
-      transition: background 0.2s, color 0.2s;
-    }
-    nav a:hover, nav a.active {
-      background: var(--card-bg);
-      color: var(--accent);
-      border: 1px solid var(--border);
-    }
-    .container { max-width: 1240px; margin: 0 auto; padding: 32px 24px; }
-    
-    .hero {
-      background: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 36px 32px;
-      margin-bottom: 32px;
-    }
-    .hero-badge {
-      display: inline-block;
-      background: rgba(88, 166, 255, 0.15);
-      color: var(--accent);
-      border: 1px solid rgba(88, 166, 255, 0.3);
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 12px;
-    }
-    .hero h2 { color: var(--heading); font-size: 26px; font-weight: 700; margin-bottom: 12px; }
-    .hero p { color: #8b949e; font-size: 15.5px; line-height: 1.7; margin-bottom: 20px; max-width: 1080px; }
-    .hypothesis-quote {
-      border-left: 3px solid var(--accent);
-      background: rgba(88, 166, 255, 0.05);
-      padding: 14px 18px;
-      border-radius: 0 8px 8px 0;
-      color: var(--heading);
-      font-style: italic;
-      font-size: 14.5px;
-      margin: 16px 0 24px 0;
-    }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      margin-top: 24px;
-    }
-    .metric-card {
-      background: #0d1117;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 18px;
-    }
-    .metric-title { font-size: 11.5px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
-    .metric-val { font-size: 26px; font-weight: 700; color: var(--heading); margin-top: 6px; }
-    .metric-tag { font-size: 12.5px; color: var(--accent-green); margin-top: 4px; display: block; font-weight: 500; }
-    
-    .section-title {
-      font-size: 21px;
-      color: var(--heading);
-      margin: 40px 0 16px 0;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .section-title::before {
-      content: "";
-      width: 4px;
-      height: 22px;
-      background: var(--accent);
-      border-radius: 2px;
-    }
-    .section-subtitle {
-      font-size: 14px;
-      color: #8b949e;
-      margin-top: -10px;
-      margin-bottom: 20px;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 24px;
-      margin-bottom: 24px;
-    }
-
-    /* Primitives Grid */
-    .primitives-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-    }
-    .primitive-card {
-      background: var(--card-sub);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 20px;
-      transition: transform 0.2s, border-color 0.2s;
-    }
-    .primitive-card:hover {
-      transform: translateY(-2px);
-      border-color: var(--accent);
-    }
-    .primitive-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .primitive-name {
-      font-family: var(--mono);
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-    .primitive-num {
-      background: rgba(88, 166, 255, 0.1);
-      color: var(--accent);
-      font-size: 11px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 12px;
-    }
-    .primitive-desc {
-      font-size: 13.5px;
-      color: #8b949e;
-      line-height: 1.5;
-    }
-    .primitive-footer {
-      margin-top: 12px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(48, 54, 61, 0.6);
-      font-size: 12px;
-      color: var(--accent-cyan);
-      font-family: var(--mono);
-    }
-
-    /* Dual Implementation */
-    .impl-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-    @media (max-width: 800px) {
-      .impl-grid { grid-template-columns: 1fr; }
-    }
-    .impl-box {
-      background: var(--card-sub);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 22px;
-    }
-    .impl-box h4 {
-      font-size: 17px;
-      color: var(--heading);
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .impl-box p {
-      font-size: 13.5px;
-      color: #8b949e;
-      margin-bottom: 14px;
-    }
-    .impl-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      font-size: 13px;
-    }
-    .impl-list li {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--text);
-    }
-    .impl-list li::before {
-      content: "•";
-      color: var(--accent);
-      font-size: 16px;
-    }
-
-    /* Diagram Box */
-    .diagram-box {
-      background: #010409;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 20px;
-      font-family: var(--mono);
-      font-size: 13px;
-      color: #8b949e;
-      overflow-x: auto;
-      line-height: 1.5;
-    }
-    .diagram-box span.hi { color: var(--accent); }
-    .diagram-box span.green { color: var(--accent-green); }
-    .diagram-box span.purple { color: var(--accent-purple); }
-    .diagram-box span.cyan { color: var(--accent-cyan); }
-    .diagram-box span.yellow { color: var(--accent-yellow); }
-
-    /* Tables */
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13.5px;
-      margin-top: 10px;
-    }
-    .data-table th, .data-table td {
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid var(--border);
-    }
-    .data-table th {
-      background: #010409;
-      color: var(--heading);
-      font-weight: 600;
-      font-size: 12.5px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .data-table tr:hover {
-      background: rgba(255, 255, 255, 0.02);
-    }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .badge-primary { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
-    .badge-success { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
-    .badge-purple { background: rgba(188, 140, 255, 0.15); color: var(--accent-purple); }
-
-    /* Hypotheses */
-    .hypo-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 16px;
-    }
-    .hypo-card {
-      background: var(--card-sub);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 18px;
-    }
-    .hypo-card h5 {
-      font-size: 14.5px;
-      color: var(--accent);
-      margin-bottom: 6px;
-    }
-    .hypo-card p {
-      font-size: 13px;
-      color: #8b949e;
-      line-height: 1.5;
-    }
-
-    footer {
-      text-align: center;
-      color: #484f58;
-      font-size: 13px;
-      margin-top: 60px;
-      padding-top: 24px;
-      border-top: 1px solid var(--border);
-    }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cinzel:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Libre+Caslon+Text:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <div class="brand">
-      <div class="logo-badge">NEXORA</div>
-      <div class="brand-title">
-        <h1>NEXORA Operating System</h1>
-        <span>Neural EXecution Orchestration and Resource Architecture (v0.1 Spec)</span>
+  <div class="site-shell">
+    <header class="topbar">
+      <div>
+        <div class="wordmark">NEXORA</div>
+        <div class="machine-label">Research architecture · specification 0.1</div>
       </div>
-    </div>
-    <nav>
-      <a href="index.html" class="active">Overview &amp; Spec</a>
-      <a href="boot-sim.html">Boot Simulation</a>
-      <a href="https://github.com/abusuraihsakhri/Nexora" target="_blank">GitHub Repo</a>
-    </nav>
-  </header>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="#thesis">Thesis</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#evidence">Evidence</a>
+        <a href="#limits">Limits</a>
+        <a href="boot-sim.html">Boot proof</a>
+      </nav>
+    </header>
 
-  <div class="container">
-    <div class="hero">
-      <span class="hero-badge">Architecture &amp; Competitive Specification v0.1</span>
-      <h2>AI-Native Operating System &amp; Semantic Resource Architecture</h2>
-      <p>
-        Nexora is engineered around <strong>semantic knowledge of AI workloads</strong> rather than conventional process, page, and device abstractions alone. By exposing computational graphs, tensor lifecycles, model residency, and accelerator topologies directly to the kernel, Nexora achieves whole-system execution efficiency across heterogeneous CPU, GPU, NPU, and memory domains.
-      </p>
-      <div class="hypothesis-quote">
-        "An operating system that understands computation graphs, tensor lifetimes, model state, accelerator requirements, topology, data locality, deadlines, and resource capabilities can manage AI workloads more efficiently than an operating system that sees primarily processes, virtual pages, files, and devices."
-      </div>
-      <div class="metrics">
-        <div class="metric-card">
-          <div class="metric-title">Core Primitives</div>
-          <div class="metric-val" style="color: var(--accent);">8</div>
-          <span class="metric-tag">First-Class AI Abstractions</span>
+    <main>
+      <section class="masthead">
+        <div>
+          <div class="kicker">Neural EXecution Orchestration and Resource Architecture</div>
+          <h1>NEXORA</h1>
+          <p class="deck">
+            An AI-native operating-system research architecture in which tensor lifetimes,
+            work graphs, topology, state, deadlines, and capabilities become visible to the
+            resource manager instead of being hidden behind conventional process and page abstractions.
+          </p>
+          <div class="button-row">
+            <a class="btn primary" href="boot-sim.html">Open boot proof</a>
+            <a class="btn" href="https://github.com/abusuraihsakhri/Nexora">Read the source</a>
+          </div>
         </div>
-        <div class="metric-card">
-          <div class="metric-title">Kernel Planes</div>
-          <div class="metric-val" style="color: var(--accent-purple);">2</div>
-          <span class="metric-tag">Semantic Plane &amp; Mechanism Plane</span>
-        </div>
-        <div class="metric-card">
-          <div class="metric-title">Research Hypotheses</div>
-          <div class="metric-val" style="color: var(--accent-cyan);">H1 — H5</div>
-          <span class="metric-tag">Memory, Locality &amp; Tail Latency</span>
-        </div>
-        <div class="metric-card">
-          <div class="metric-title">Target Workload</div>
-          <div class="metric-val" style="color: var(--accent-green); font-size: 20px; margin-top: 10px;">LLM Inference</div>
-          <span class="metric-tag">Heterogeneous Co-execution</span>
-        </div>
-      </div>
-    </div>
+        <aside class="mast-note">
+          <span class="machine-label">Research position</span>
+          <p>
+            <strong>Nexora is not a replacement for PyTorch, CUDA, ROCm, PJRT, or Linux today.</strong>
+            It is a testable systems hypothesis: expose enough AI semantics to the operating system
+            to improve whole-machine scheduling, memory placement, isolation, and data movement.
+          </p>
+        </aside>
+      </section>
 
-    <!-- The 8 Core Primitives -->
-    <h3 class="section-title">The Eight Core Nexora Primitives</h3>
-    <p class="section-subtitle">The foundational semantic abstractions through which the kernel coordinates AI compute, memory, and security.</p>
-    
-    <div class="primitives-grid">
-      <div class="primitive-card">
-        <div class="primitive-header">
-          <span class="primitive-name">NXTensor</span>
-          <span class="primitive-num">Primitive 1</span>
+      <section class="status-strip" aria-label="Current status">
+        <div class="status-cell"><span class="machine-label">Implementation</span><span class="status-value">x86-64 research kernel</span></div>
+        <div class="status-cell"><span class="machine-label">Execution scope</span><span class="status-value">UP-only · QEMU-first</span></div>
+        <div class="status-cell"><span class="machine-label">Validation</span><span class="status-value">CI + host + QEMU</span></div>
+        <div class="status-cell"><span class="machine-label">Maturity</span><span class="status-value">Pre-alpha research system</span></div>
+      </section>
+
+      <section class="section" aria-labelledby="charter-title">
+        <div class="paper proof">
+          <div class="ornament-frame">
+            <div class="charter-sub">Research charter · September MMXXVI</div>
+            <div class="charter-title" id="charter-title">Certificate of Intent</div>
+            <p class="charter-copy">
+              This project is constituted to investigate whether an operating system that understands
+              AI workload semantics can make measurably better resource decisions than one that observes
+              only generic processes, virtual pages, and devices.
+            </p>
+            <div class="charter-name">Nexora</div>
+            <div class="charter-sub">Neural EXecution Orchestration and Resource Architecture</div>
+            <div class="seal" aria-label="Nexora research seal"><span>RESEARCH<br>SEAL</span></div>
+            <div class="charter-meta">
+              <span>Serial · NX-RK-2026-0017</span>
+              <span>Class · Experimental systems research</span>
+              <span>Status · Open architecture draft</span>
+            </div>
+          </div>
         </div>
-        <div class="primitive-desc">Semantic data object with OS-visible dtype, shape, size, location (RAM/HBM), lifetime, mutability, reuse hints, and producer/consumer tracking.</div>
-        <div class="primitive-footer">Lifetime-aware allocation &amp; reclamation</div>
-      </div>
+      </section>
 
-      <div class="primitive-card">
-        <div class="primitive-header">
-          <span class="primitive-name">NXWork</span>
-          <span class="primitive-num">Primitive 2</span>
+      <section class="section" id="thesis">
+        <div class="section-head">
+          <div class="section-number">01 · THESIS</div>
+          <div>
+            <h2>The operating system should see the shape of the work.</h2>
+            <p class="section-lede">
+              AI applications already know which objects are model weights, activations, KV cache,
+              temporary workspace, or persistent state. They know dependency graphs, deadlines, and
+              accelerator preferences. Nexora asks whether some of that information should cross the
+              kernel boundary and participate directly in resource management.
+            </p>
+          </div>
         </div>
-        <div class="primitive-desc">The fundamental schedulable semantic unit. Defines operation type, input/output tensors, dependencies, deadlines, priority, and resource requirements.</div>
-        <div class="primitive-footer">Sits above threads as AI task unit</div>
-      </div>
-
-      <div class="primitive-card">
-        <div class="primitive-header">
-          <span class="primitive-name">NXGraph</span>
-          <span class="primitive-num">Primitive 3</span>
+        <div class="grid-3">
+          <article class="card">
+            <div class="index-label">Object 01</div>
+            <h3>Tensor semantics</h3>
+            <p>Typed shape, lifetime, placement class, ownership, reuse hints, and eventually real backing storage.</p>
+          </article>
+          <article class="card">
+            <div class="index-label">Object 02</div>
+            <h3>Work graphs</h3>
+            <p>Dependencies become explicit scheduling information rather than a sequence of opaque, unrelated calls.</p>
+          </article>
+          <article class="card">
+            <div class="index-label">Object 03</div>
+            <h3>Capability authority</h3>
+            <p>Resource access is represented as explicit rights over kernel objects, with constrained delegation.</p>
+          </article>
         </div>
-        <div class="primitive-desc">Directed dependency computation graph allowing the OS to determine what can execute, what must wait, and what memory can be immediately freed.</div>
-        <div class="primitive-footer">Enables early graph-aware garbage cleanup</div>
-      </div>
+      </section>
 
-      <div class="primitive-card">
-        <div class="primitive-header">
-          <span class="primitive-name">NXState</span>
-          <span class="primitive-num">Primitive 4</span>
+      <section class="section" id="architecture">
+        <div class="section-head">
+          <div class="section-number">02 · ARCHITECTURE</div>
+          <div>
+            <h2>Semantic policy above mechanical execution.</h2>
+            <p class="section-lede">
+              Nexora separates what the system knows about AI work from the low-level mechanisms that execute it.
+              The distinction is deliberate: policies should evolve without rewriting the kernel substrate.
+            </p>
+          </div>
         </div>
-        <div class="primitive-desc">Persistent semantic resources beyond ephemeral tensors (e.g. loaded model weights, KV caches, LoRA adapters, session and persistent agent state).</div>
-        <div class="primitive-footer">OS-managed model residency &amp; zero cold-start</div>
-      </div>
+        <pre class="architecture" aria-label="Nexora architecture diagram">Applications / agents / inference services
+                         │
+                         ▼
+                 <strong>Nexora Runtime / ABI</strong>
+                         │
+          ┌──────────────┴──────────────┐
+          │                             │
+          ▼                             ▼
+ <strong>SEMANTIC PLANE</strong>                <strong>MECHANISM PLANE</strong>
+ NXTensor / NXState              CPU context / VM
+ NXWork / NXGraph                interrupts / DMA
+ NXCapability                    drivers / device queues
+          │                             │
+          └──────────────┬──────────────┘
+                         ▼
+                   <strong>NXScheduler</strong>
+                         │
+                         ▼
+              Resource / topology model
+                         │
+             CPU · GPU · NPU · NIC · RAM</pre>
+        <p class="callout">
+          The present kernel implements only part of this diagram. GPU/NPU execution, production user VM,
+          and topology-aware placement remain future mechanisms; they are not represented as completed features.
+        </p>
+      </section>
 
-      <div class="primitive-card">
-        <div class="primitive-header">
-          <span class="primitive-name">NXResource</span>
-          <span class="primitive-num">Primitive 5</span>
+      <section class="section">
+        <div class="section-head">
+          <div class="section-number">03 · PRIMITIVES</div>
+          <div>
+            <h2>Eight concepts define the research vocabulary.</h2>
+            <p class="section-lede">
+              The vocabulary is intentionally small. Every primitive must earn its place by enabling a measurable systems experiment.
+            </p>
+          </div>
         </div>
-        <div class="primitive-desc">Common unified abstraction making CPUs, GPUs, NPUs, HBM, RAM, NVMe, and NICs queryable through a single common resource model.</div>
-        <div class="primitive-footer">Heterogeneous compute fabric</div>
-      </div>
-
-      <div class="primitive-card">
-        <div class="primitive-header">
-          <span class="primitive-name">NXTopology</span>
-          <span class="primitive-num">Primitive 6</span>
+        <div class="grid-2">
+          <article class="card"><div class="index-label">NXTensor</div><h3>Semantic data object</h3><p>Describes typed multidimensional data, location class, lifetime, mutability, and ownership.</p></article>
+          <article class="card"><div class="index-label">NXWork</div><h3>Schedulable semantic unit</h3><p>Represents an operation with inputs, outputs, priority, deadline, and device constraints.</p></article>
+          <article class="card"><div class="index-label">NXGraph</div><h3>Dependency structure</h3><p>Makes readiness, downstream reuse, and reclamation opportunities explicit.</p></article>
+          <article class="card"><div class="index-label">NXState</div><h3>Persistent AI state</h3><p>Models weights, KV cache, adapters, session state, and other long-lived resources.</p></article>
+          <article class="card"><div class="index-label">NXResource</div><h3>Unified resource description</h3><p>Provides a common model for compute, memory, storage, and network resources.</p></article>
+          <article class="card"><div class="index-label">NXTopology</div><h3>Movement cost map</h3><p>Represents locality, bandwidth, latency, NUMA distance, and accelerator interconnects.</p></article>
+          <article class="card"><div class="index-label">NXCapability</div><h3>Explicit authority</h3><p>Defines who may use which resource, with which rights and constraints.</p></article>
+          <article class="card"><div class="index-label">NXScheduler</div><h3>Semantic placement policy</h3><p>Combines graph state, locality, resource pressure, deadlines, and permissions.</p></article>
         </div>
-        <div class="primitive-desc">Hardware interconnect graph capturing latency, bandwidth, NUMA distance, PCIe hierarchy, and direct accelerator accessibility.</div>
-        <div class="primitive-footer">Minimizes cross-bus data movement</div>
-      </div>
+      </section>
 
-      <div class="primitive-card">
-        <div class="primitive-header">
-          <span class="primitive-name">NXCapability</span>
-          <span class="primitive-num">Primitive 7</span>
+      <section class="section" id="evidence">
+        <div class="section-head">
+          <div class="section-number">04 · EVIDENCE</div>
+          <div>
+            <h2>What the repository currently proves.</h2>
+            <p class="section-lede">
+              The implementation is evaluated by executable checks. Architectural language is kept separate from validated behavior.
+            </p>
+          </div>
         </div>
-        <div class="primitive-desc">Explicit unforgeable resource authority granting fine-grained execution, memory, model, and network delegation with explicit constraints.</div>
-        <div class="primitive-footer">Capability-based agent &amp; process security</div>
-      </div>
+        <table class="ledger">
+          <thead><tr><th>Surface</th><th>Current evidence</th><th>Interpretation</th></tr></thead>
+          <tbody>
+            <tr><td>Boot substrate</td><td><span class="tag">QEMU</span> Multiboot2, long mode, kernel link, serial boot smoke test.</td><td>Confirms the current research kernel boots in its supported virtual environment.</td></tr>
+            <tr><td>AI object model</td><td><span class="tag">Host tests</span> tensor validation, work graphs, deadlock detection, reference-counted lifetime.</td><td>Validates object semantics, not accelerator performance.</td></tr>
+            <tr><td>Privilege boundary</td><td><span class="tag">Host + build</span> GDT/TSS, IDT, syscall frame, ELF checks, handle rights.</td><td>Structural and integration evidence; production Ring-3 boot execution is not claimed.</td></tr>
+            <tr><td>Qualification</td><td><span class="tag">Sanitizers</span> telemetry, deterministic fault injection, release-health gates.</td><td>Provides repeatable validation instrumentation.</td></tr>
+            <tr><td>Release hardening</td><td><span class="tag">Manifest</span> committed integrity verification, trace, watchdog, build identity.</td><td>Detects unexpected source drift before the release gate proceeds.</td></tr>
+          </tbody>
+        </table>
+      </section>
 
-      <div class="primitive-card">
-        <div class="primitive-header">
-          <span class="primitive-name">NXScheduler</span>
-          <span class="primitive-num">Primitive 8</span>
+      <section class="section" id="limits">
+        <div class="section-head">
+          <div class="section-number">05 · LIMITS</div>
+          <div>
+            <h2>Research credibility depends on stating what is not built.</h2>
+            <p class="section-lede">
+              Nexora deliberately narrows its claims. The following boundaries remain active until code and executable validation remove them.
+            </p>
+          </div>
         </div>
-        <div class="primitive-desc">Holistic multi-factor scheduler evaluating execution time, transfer cost, queue delay, memory pressure, deadline penalties, and topology.</div>
-        <div class="primitive-footer">Cost = Time + Transfer + Queue + Pressure</div>
-      </div>
-    </div>
-
-    <!-- Dual Plane Architecture -->
-    <h3 class="section-title">Two-Plane Kernel Architecture</h3>
-    <p class="section-subtitle">Clean separation of semantic AI understanding from low-level mechanism virtualization.</p>
-    
-    <div class="card">
-      <pre class="diagram-box">
-+---------------------------------------------------------------------------------------------------+
-|                                  <span class="hi">NEXORA SYSTEM ARCHITECTURE</span>                                       |
-+---------------------------------------------------------------------------------------------------+
-|                                   <span class="purple">Applications &amp; AI Agents</span>                                        |
-|                                              │                                                    |
-|                                       <span class="purple">PyTorch / JAX</span>                                               |
-|                                              │                                                    |
-|                                   <span class="purple">Nexora Runtime Adapter</span>                                          |
-|                                              │                                                    |
-|                                       <span class="purple">Nexora AI ABI</span>                                               |
-|                                              │                                                    |
-|    ┌─────────────────────────────────────────┴─────────────────────────────────────────┐          |
-|    │                                                                                   │          |
-| <span class="cyan">[ SEMANTIC PLANE ]</span>                                                   <span class="green">[ MECHANISM PLANE ]</span>           |
-|    - NXWorkGraph &amp; Dependency DAGs                                      - CPU Scheduler &amp; Timers  |
-|    - NXTensor Semantic Lifetimes                                        - Physical Frame Alloc    |
-|    - NXState (Model &amp; KV Cache Residency)                               - Virtual Memory (Paging) |
-|    - NXCapability Access Control &amp; Delegation                           - DMA &amp; Device Drivers    |
-|    - NXTopology Locality Awareness                                      - Interrupt Handlers(IDT) |
-|    │                                                                                   │          |
-|    └─────────────────────────────────────────┬─────────────────────────────────────────┘          |
-|                                              │                                                    |
-|                                         <span class="hi">NXScheduler</span>                                               |
-|                                              │                                                    |
-|                                         <span class="hi">NXResource</span>                                                |
-|                                              │                                                    |
-|                           <span class="yellow">Heterogeneous Hardware Fabric</span>                                   |
-|               ┌──────────────────────────────┼──────────────────────────────┐                     |
-|              <span class="yellow">CPU</span>                            <span class="yellow">GPU</span>                            <span class="yellow">NPU</span>                    |
-|              RAM                            HBM                       Accelerator RAM             |
-|               └────────────────────── NVMe / NIC / Remote ──────────────────┘                     |
-+---------------------------------------------------------------------------------------------------+</pre>
-    </div>
-
-    <!-- Two Implementation Strategy -->
-    <h3 class="section-title">Two-Implementation Strategy</h3>
-    <p class="section-subtitle">Bridging bare-metal systems research with real-world accelerator benchmarking.</p>
-    
-    <div class="impl-grid">
-      <div class="impl-box">
-        <h4><span class="badge badge-primary">Track 1</span> Nexora-RK (Research Microkernel)</h4>
-        <p>A standalone, bare-metal x86_64 microkernel engineered for foundational systems research, hardware-enforced privilege isolation, and memory-safety mechanisms.</p>
-        <ul class="impl-list">
-          <li>Boots via Multiboot2 on bare-metal and QEMU x86_64</li>
-          <li>Hardware-enforced Ring 0 / Ring 3 privilege isolation (GDT/TSS)</li>
-          <li>Dedicated per-CPU %gs stack frames for fast syscall/sysret</li>
-          <li>Physical buddy/bitmap frame allocator with slab reclamation (M1 &amp; M2)</li>
-          <li>Zero-panic user memory copy with .fixup_table exception recovery</li>
-        </ul>
-      </div>
-
-      <div class="impl-box">
-        <h4><span class="badge badge-purple">Track 2</span> Nexora-X (Experimental Co-Kernel)</h4>
-        <p>A Linux-hosted co-kernel and runtime environment designed for rapid experimentation and benchmarking against production accelerator hardware.</p>
-        <ul class="impl-list">
-          <li>Runs alongside PyTorch, JAX, vLLM, and SGLang workloads</li>
-          <li>Interfaces directly with CUDA, ROCm, and OpenXLA / PJRT backends</li>
-          <li>Evaluates multi-model LLM inference under real HBM/GPU pressure</li>
-          <li>Tests DAG-aware tensor reclamation and multi-priority work dispatch</li>
-          <li>Mature mechanisms migrate directly down into Nexora-RK</li>
-        </ul>
-      </div>
-    </div>
-
-    <!-- Competitive Boundaries -->
-    <h3 class="section-title">Competitive Boundaries &amp; Non-Goals</h3>
-    <p class="section-subtitle">Defining what Nexora is, what it deliberately avoids, and where it interfaces with existing systems.</p>
-    
-    <div class="card" style="overflow-x: auto; padding: 0;">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>System</th>
-            <th>Primary Focus</th>
-            <th>Nexora's Strategic Separation</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>Linux</strong></td>
-            <td>General-purpose OS (processes, threads, pages, cgroups).</td>
-            <td>Nexora exposes OS-level AI semantics; does not recreate hundreds of general device drivers.</td>
-          </tr>
-          <tr>
-            <td><strong>LithOS</strong></td>
-            <td>Fine-grained spatial scheduling inside the GPU.</td>
-            <td>Nexora targets whole-system (CPU + GPU + NPU + RAM + HBM + Fabric) semantic orchestration.</td>
-          </tr>
-          <tr>
-            <td><strong>NVIDIA Dynamo</strong></td>
-            <td>Distributed generative-AI inference router.</td>
-            <td>Dynamo operates at the inference-routing level; Nexora operates beneath it as the host resource engine.</td>
-          </tr>
-          <tr>
-            <td><strong>NVIDIA Run:ai</strong></td>
-            <td>Cluster AI workload pooling and orchestration.</td>
-            <td>Run:ai governs cluster allocations; Nexora coordinates machine-level execution and memory.</td>
-          </tr>
-          <tr>
-            <td><strong>OpenXLA / PJRT</strong></td>
-            <td>Framework-independent hardware device API.</td>
-            <td>Nexora integrates PJRT device backends directly into its semantic resource fabric.</td>
-          </tr>
-          <tr>
-            <td><strong>AIOS</strong></td>
-            <td>LLM agent facilities running above an OS.</td>
-            <td>AIOS sits <em>above</em> the host OS; Nexora provides the <em>underlying</em> capability-managed kernel.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Research Hypotheses -->
-    <h3 class="section-title">Research Hypotheses &amp; Target Workload</h3>
-    <p class="section-subtitle">Evaluating Nexora through rigorous, measurable systems experiments.</p>
-    
-    <div class="hypo-grid">
-      <div class="hypo-card">
-        <h5>H1 — Semantic Tensor Lifetime</h5>
-        <p>Producer/consumer DAG tracking allows Nexora to reclaim temporary tensors early, reducing peak memory by &ge;15% compared to lifetime-blind allocators.</p>
-      </div>
-      <div class="hypo-card">
-        <h5>H2 — Locality-Aware Scheduling</h5>
-        <p>Topology-aware placement minimizes expensive cross-bus data movement, reducing host-to-device and device-to-device transfers by &ge;20%.</p>
-      </div>
-      <div class="hypo-card">
-        <h5>H3 — Graph-Aware Scheduling</h5>
-        <p>Dependency-aware dispatch over multi-priority queues reduces p99 tail latency compared to independent FIFO task scheduling.</p>
-      </div>
-      <div class="hypo-card">
-        <h5>H4 — Shared Tensor Handles</h5>
-        <p>Zero-copy capability-protected shared backing eliminates cross-process memory duplication without sacrificing security boundaries.</p>
-      </div>
-      <div class="hypo-card">
-        <h5>H5 — Persistent Model State</h5>
-        <p>Treating weights and KV caches as OS-managed persistent resources measurably slashes model cold-start times and time-to-first-token (TTFT).</p>
-      </div>
-      <div class="hypo-card" style="border-color: var(--accent-green);">
-        <h5 style="color: var(--accent-green);">Target Workload</h5>
-        <p><strong>Multi-model LLM inference on a single heterogeneous machine:</strong> dynamic concurrent requests, shared KV caches, high memory pressure, and CPU/GPU/NPU coordination.</p>
-      </div>
-    </div>
-
-    <!-- The 4 Project Rules -->
-    <h3 class="section-title">The Four Project Rules</h3>
-    <div class="card">
-      <p style="color: #8b949e; margin-bottom: 16px; font-size: 14px;">Every major architectural abstraction introduced into Nexora must answer four mandatory questions:</p>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;">
-        <div style="background: #010409; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-size: 13.5px;">
-          <strong style="color: var(--accent);">1. Problem:</strong> What existing problem does this solve?
+        <div class="grid-3">
+          <article class="card"><div class="index-label">CPU</div><h3>No SMP claim</h3><p>v0.1 runs with one virtual CPU while per-CPU ownership and synchronization are designed.</p></article>
+          <article class="card"><div class="index-label">Memory</div><h3>No user tensor mapping yet</h3><p>The mapping syscall returns ENOSYS rather than exposing a kernel pointer without a real VM layer.</p></article>
+          <article class="card"><div class="index-label">Accelerators</div><h3>No real GPU/NPU execution</h3><p>Device classes exist as semantic abstractions; hardware execution backends remain future work.</p></article>
+          <article class="card"><div class="index-label">Scheduling</div><h3>Synchronous executor</h3><p>The current executor is deterministic and graph-aware, but not yet preemptive or asynchronously device-driven.</p></article>
+          <article class="card"><div class="index-label">Time</div><h3>No fabricated timing</h3><p>Result timestamps remain zero until a calibrated monotonic kernel clock is wired.</p></article>
+          <article class="card"><div class="index-label">Allocator</div><h3>Object reuse, not page return</h3><p>Slabs reuse objects; fully free slab pages are not yet reclaimed to the frame allocator.</p></article>
         </div>
-        <div style="background: #010409; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-size: 13.5px;">
-          <strong style="color: var(--accent-purple);">2. Limitation:</strong> Why can't the current runtime layer solve it adequately?
-        </div>
-        <div style="background: #010409; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-size: 13.5px;">
-          <strong style="color: var(--accent-cyan);">3. Necessity:</strong> Why should the operating system know about it?
-        </div>
-        <div style="background: #010409; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-size: 13.5px;">
-          <strong style="color: var(--accent-green);">4. Metric:</strong> What measurable improvement results?
-        </div>
-      </div>
-    </div>
+      </section>
 
+      <section class="section">
+        <div class="section-head">
+          <div class="section-number">06 · PROGRAM</div>
+          <div>
+            <h2>The next proof should be quantitative.</h2>
+            <p class="section-lede">
+              The project should advance by experiments, not feature count: first a monotonic clock and VM-backed tensor storage,
+              then asynchronous simulated accelerators, locality-aware placement, and only later SMP and real device backends.
+            </p>
+            <div class="button-row">
+              <a class="btn primary" href="boot-sim.html">Inspect the boot sequence</a>
+              <a class="btn" href="https://github.com/abusuraihsakhri/Nexora/tree/master/kernel">Open kernel tree</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div>
+        <div class="wordmark">NEXORA</div>
+        <div>Research architecture for semantic AI resource management.</div>
+      </div>
+      <div class="machine-label">Neural EXecution Orchestration and Resource Architecture · 2026</div>
+    </footer>
   </div>
-
-  <footer>
-    NEXORA: Neural EXecution Orchestration and Resource Architecture &bull; 2026
-  </footer>
 </body>
 </html>
