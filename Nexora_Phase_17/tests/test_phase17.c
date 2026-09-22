@@ -13,6 +13,10 @@ static void test_health(void) {
     assert(nx_health_register("scheduler", &sched) == 0);
     assert(nx_health_register("memory", &mem) == 0);
     assert(sched == 0u && mem == 1u);
+
+    uint32_t duplicate = 99u;
+    assert(nx_health_register("scheduler", &duplicate) == -4);
+
     assert(nx_health_update(sched, NX_HEALTH_OK, 0, 100u) == 0);
     assert(nx_health_update(mem, NX_HEALTH_DEGRADED, 7, 110u) == 0);
     nx_health_summary_t s = nx_health_summarize();
@@ -44,7 +48,7 @@ static void test_watchdog(void) {
     assert(nx_watchdog_arm(4u, 100u, 1000u) == 0);
     nx_watchdog_target_t overdue[4];
     assert(nx_watchdog_check(1099u, overdue, 4u) == 0u);
-    assert(nx_watchdog_check(1101u, overdue, 4u) == 1u);
+    assert(nx_watchdog_check(1100u, overdue, 4u) == 1u);
     assert(overdue[0].component_id == 4u);
     assert(overdue[0].misses == 1u);
     assert(nx_watchdog_check(1200u, overdue, 4u) == 1u);
