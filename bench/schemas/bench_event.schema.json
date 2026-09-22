@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexora.local/schemas/bench_event.schema.json",
+  "title": "Nexora benchmark event v1",
+  "type": "object",
+  "required": ["schema", "run_id", "benchmark", "metric", "value", "unit", "iteration"],
+  "properties": {
+    "schema": {"const": "nexora.bench.v1"},
+    "run_id": {"type": "string", "minLength": 1},
+    "benchmark": {"type": "string", "minLength": 1},
+    "metric": {"type": "string", "minLength": 1},
+    "value": {"type": "number"},
+    "unit": {"type": "string", "minLength": 1},
+    "iteration": {"type": "integer", "minimum": 0},
+    "variant": {"type": "string"},
+    "workload": {"type": "string"},
+    "timestamp_ns": {"type": "integer", "minimum": 0},
+    "phase": {"type": "string"},
+    "device": {"type": "string"},
+    "tags": {"type": "object", "additionalProperties": {"type": ["string", "number", "integer", "boolean"]}},
+    "metadata": {"type": "object"}
+  },
+  "additionalProperties": true
+}
