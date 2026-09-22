@@ -1,6 +1,8 @@
 #include <kernel/idt.h>
 #include <kernel/x86_64.h>
 #include <kernel/printk.h>
+#include <kernel/panic.h>
+#include <nexora/syscall.h>
 
 static struct idt_entry64 s_idt[IDT_ENTRIES] __attribute__((aligned(16)));
 static struct idtr64 s_idtr;
@@ -67,23 +69,56 @@ void isr_common_handler(struct interrupt_frame *frame) {
 
     if (frame->vector == 14) {
         g_page_fault_count++;
-        /* Milestone M5: Fixup table inspection */
         uintptr_t fixup = nexora_exception_fixup_lookup((uintptr_t)frame->rip);
         if (fixup != 0) {
             frame->rip = (u64)fixup;
             return;
         }
-        /* Ring 3 fault: recoverable process fault */
+
         if ((frame->cs & 3) == 3) {
+            nexora_syscall_bad_rip_fault(NULL);
+#if defined(HOST_TEST)
             return;
+#else
+            panic("unhandled userspace page fault: no scheduler exit path");
+#endif
         }
+
+#if defined(HOST_TEST)
         return;
+#else
+        panic("unhandled kernel page fault");
+#endif
     }
 
     if (frame->vector == 13) {
         g_gp_count++;
+        if ((frame->cs & 3) == 3) {
+            nexora_syscall_bad_rip_fault(NULL);
+#if defined(HOST_TEST)
+            return;
+#else
+            panic("unhandled userspace general-protection fault");
+#endif
+        }
+#if defined(HOST_TEST)
         return;
+#else
+        panic("unhandled kernel general-protection fault");
+#endif
     }
+
+    if (frame->vector == 8) {
+#if defined(HOST_TEST)
+        return;
+#else
+        panic("double fault");
+#endif
+    }
+
+#if !defined(HOST_TEST)
+    panic("unhandled interrupt vector");
+#endif
 }
 
 void idt_init(void) {
