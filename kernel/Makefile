@@ -46,7 +46,16 @@ AI_SOURCES := \
 	src/ai/capability.c \
 	src/ai/scheduler.c \
 	src/ai/benchmark.c \
-	src/ai/integration.c
+	src/ai/integration.c \
+	src/ai/telemetry.c \
+	src/ai/fault_injection.c \
+	src/ai/release_health.c
+
+HARDENING_SOURCES := \
+	src/phase17/health.c \
+	src/phase17/trace.c \
+	src/phase17/watchdog.c \
+	src/phase17/build_info.c
 
 C_SOURCES := \
 	src/kernel/kmain.c \
@@ -57,7 +66,8 @@ C_SOURCES := \
 	src/mm/slab.c \
 	$(ARCH_C_SOURCES) \
 	$(SYS_SOURCES) \
-	$(AI_SOURCES)
+	$(AI_SOURCES) \
+	$(HARDENING_SOURCES)
 
 ASM_SOURCES := $(ARCH_ASM_SOURCES)
 
@@ -72,7 +82,8 @@ HOST_TEST_SOURCES := \
 	src/mm/slab.c \
 	$(ARCH_C_SOURCES) \
 	$(SYS_SOURCES) \
-	$(AI_SOURCES)
+	$(AI_SOURCES) \
+	$(HARDENING_SOURCES)
 
 HOST_REPORT_SOURCES := \
 	tests/phase14_report.c \
@@ -82,9 +93,10 @@ HOST_REPORT_SOURCES := \
 	src/mm/slab.c \
 	$(ARCH_C_SOURCES) \
 	$(SYS_SOURCES) \
-	$(AI_SOURCES)
+	$(AI_SOURCES) \
+	$(HARDENING_SOURCES)
 
-.PHONY: all clean run debug check test-host phase14-report verify-phase14
+.PHONY: all clean run debug check test-host phase14-report verify-phase14 verify-current
 
 all: $(ISO)
 
@@ -133,7 +145,10 @@ phase14-report: $(HOST_REPORT)
 	@./$(HOST_REPORT)
 
 verify-phase14: test-host $(KERNEL)
-	@echo "Phase 14 host tests and freestanding kernel link passed."
+	@echo "Phase 14 baseline tests and freestanding kernel link passed."
+
+verify-current: verify-phase14
+	@echo "Integrated Nexora kernel (Phases 14-17) verified."
 
 run: $(ISO)
 	$(QEMU) \
@@ -148,7 +163,7 @@ run: $(ISO)
 debug: $(ISO)
 	$(QEMU) \
 		-m 512M \
-		-smp 2 \
+		-smp 1 \
 		-cdrom $(ISO) \
 		-serial stdio \
 		-display gtk \
