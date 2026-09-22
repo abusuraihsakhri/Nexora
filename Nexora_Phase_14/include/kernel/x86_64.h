@@ -20,6 +20,7 @@ struct nexora_percpu {
     u32 cpu_id;            /* offset 16 */
     u32 nest_depth;        /* offset 20 */
     u64 saved_user_rsp[4]; /* offset 24 */
+    uintptr_t current_process; /* offset 56: architecture-neutral process pointer */
 };
 
 extern struct nexora_percpu nexora_bsp_percpu;
@@ -33,6 +34,7 @@ static inline void nexora_percpu_init(struct nexora_percpu *cpu, u32 cpu_id, uin
     cpu->cpu_id = cpu_id;
     cpu->nest_depth = 0;
     for (int i = 0; i < 4; ++i) cpu->saved_user_rsp[i] = 0;
+    cpu->current_process = 0;
 }
 
 static inline int nexora_percpu_push_user_rsp(struct nexora_percpu *cpu, u64 rsp) {
