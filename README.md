@@ -9,6 +9,30 @@
 **Primary target:** AI inference and heterogeneous AI execution  
 **Long-term scope:** Training, agents, distributed AI, scientific/accelerated computing  
 
+## Current implementation status
+
+The repository now has one authoritative development layout:
+
+```text
+kernel/          Nexora-RK active source
+bench/           benchmark and regression tooling
+qualification/   telemetry, fault injection, and qualification gates
+release/         observability and release-hardening tooling
+```
+
+The older `Nexora_Phase_XX/` directories are retained as historical snapshots only.
+
+The current kernel is deliberately a **uniprocessor research kernel**. It boots on x86-64/QEMU, exercises the AI semantic object model, builds a capability-aware syscall boundary, and integrates the Phase 16/17 qualification and observability modules into the freestanding target. Important limits remain explicit:
+
+- no SMP/AP startup or SMP-safety claim yet;
+- no real GPU/NPU execution path yet;
+- tensor userspace mapping is disabled until a real VM-backed mapping mechanism exists;
+- Ring-3 ELF/syscall logic is host/integration-tested, but the boot path does not yet launch a production userspace process;
+- the current work executor is deterministic and synchronous; it is not yet a preemptive asynchronous device scheduler;
+- timing fields remain zero when no monotonic kernel clock is available rather than using fabricated timestamps.
+
+Repository-wide validation is defined by the root `Makefile` and GitHub Actions. `make verify` tests the active kernel, benchmark contract, qualification suite, and release gate.
+
 ---
 
 <div align="center">
