@@ -80,3 +80,5 @@ nexora_syscall_entry:
     cli
     hlt
     jmp 1b
+
+.section .note.GNU-stack,"",@progbits
