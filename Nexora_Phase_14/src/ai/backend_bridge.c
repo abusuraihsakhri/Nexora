@@ -11,9 +11,14 @@ static ai_work_graph g_unified_graph;
 static bool g_graph_initialized = false;
 
 static nexora_status_t ai_bridge_retain(uint8_t handle_type, void *object) {
-    (void)handle_type;
-    (void)object;
-    return NEXORA_OK;
+    if (!object) return NEXORA_ERR(NEXORA_EINVAL);
+    if (handle_type == NEXORA_HANDLE_TENSOR) {
+        return ai_tensor_retain((ai_tensor *)object) ? NEXORA_OK : NEXORA_ERR(NEXORA_EOVERFLOW);
+    }
+    if (handle_type == NEXORA_HANDLE_WORK) {
+        return ai_work_node_retain((ai_work_node *)object) ? NEXORA_OK : NEXORA_ERR(NEXORA_EOVERFLOW);
+    }
+    return NEXORA_ERR(NEXORA_EINVAL);
 }
 
 static nexora_status_t ai_bridge_tensor_create(
@@ -40,22 +45,8 @@ static nexora_status_t ai_bridge_tensor_create(
     }
 
     *object_out = t;
-    *rights_out = NEXORA_RIGHT_READ | NEXORA_RIGHT_WRITE | NEXORA_RIGHT_MAP | NEXORA_RIGHT_RELEASE;
-    return NEXORA_OK;
-}
-
-static nexora_status_t ai_bridge_tensor_map(
-    struct nexora_process *process,
-    void *tensor_object,
-    const struct nexora_tensor_map *request,
-    uintptr_t *user_address_out
-) {
-    (void)process;
-    (void)request;
-    if (!tensor_object || !user_address_out) return NEXORA_ERR(NEXORA_EINVAL);
-
-    /* Return pointer to tensor descriptor memory buffer */
-    *user_address_out = (uintptr_t)tensor_object;
+    *rights_out = NEXORA_RIGHT_READ | NEXORA_RIGHT_WRITE |
+                  NEXORA_RIGHT_RELEASE | NEXORA_RIGHT_DELEGATE;
     return NEXORA_OK;
 }
 
@@ -184,7 +175,7 @@ static nexora_status_t ai_bridge_device_query(
 static const struct nexora_backend_ops s_ai_ops = {
     .retain = ai_bridge_retain,
     .tensor_create = ai_bridge_tensor_create,
-    .tensor_map = ai_bridge_tensor_map,
+    .tensor_map = NULL,
     .tensor_release = ai_bridge_tensor_release,
     .work_submit = ai_bridge_work_submit,
     .work_wait = ai_bridge_work_wait,
