@@ -68,18 +68,18 @@
     },
     {
       "path": "src/phase17/health.c",
-      "sha256": "3242e1547b1dbf5231cd07f5169d2d572398121213781ae3bb2668e68a878ff0",
-      "size": 5593
+      "sha256": "b3f0fe766895deaf809f9c56b62a6337f3075a6e0594c4b23d63c19b2b2d5200",
+      "size": 7122
     },
     {
       "path": "src/phase17/trace.c",
-      "sha256": "0d95b03a3321e54bf307fb931d2e756390a148a3dc9e6c6d8867139af180a017",
-      "size": 7134
+      "sha256": "a595641d0478f572b7e004a7a9ffe6ff3943976a828dc5e43bd9f6527aba1752",
+      "size": 7279
     },
     {
       "path": "src/phase17/watchdog.c",
-      "sha256": "f15a5b8abd7e2ce769309925df5d4f87572433aed24ac24d6a06944e6242c2d2",
-      "size": 2271
+      "sha256": "11fc21fcbb51c9bee08d41aecc8992b6b2573738ccc8efcfa2665b0944b27c40",
+      "size": 3298
     },
     {
       "path": "tests/run_tests.sh",
@@ -88,8 +88,8 @@
     },
     {
       "path": "tests/test_phase17.c",
-      "sha256": "33a732f916fc52c68e6c0f317002c9265a9931cbf4c524bbd65bddeb2c6fdf21",
-      "size": 2947
+      "sha256": "d947dbb14a730d3ad176ee84d4ebeacf2ead5735d59b1fb3ae272a767ec41907",
+      "size": 3042
     },
     {
       "path": "tools/benchmark_smoke.py",
