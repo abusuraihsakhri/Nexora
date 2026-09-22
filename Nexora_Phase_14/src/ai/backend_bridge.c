@@ -116,25 +116,27 @@ static nexora_status_t ai_bridge_work_wait(
     struct nexora_work_result *result_out
 ) {
     (void)process;
-    (void)timeout_ns;
     if (!work_object || !result_out) return NEXORA_ERR(NEXORA_EINVAL);
 
     ai_work_node *node = (ai_work_node *)work_object;
 
-    /* Schedule graph execution to completion */
-    if (g_graph_initialized) {
-        ai_scheduler scheduler;
-        ai_scheduler_init(&scheduler, &g_unified_graph);
-        ai_scheduler_run_report rep;
-        (void)ai_scheduler_run_to_completion(&scheduler, &rep);
+    if (node->state != AI_WORK_DONE && node->state != AI_WORK_FAILED) {
+        if (timeout_ns == 0) return NEXORA_ERR(NEXORA_ETIMEDOUT);
+        if (g_graph_initialized) {
+            ai_scheduler scheduler;
+            ai_scheduler_init(&scheduler, &g_unified_graph);
+            ai_scheduler_run_report rep;
+            (void)ai_scheduler_run_to_completion(&scheduler, &rep);
+        }
     }
 
     result_out->struct_size = sizeof(*result_out);
     result_out->state = (uint32_t)node->state;
     result_out->device_id = 0;
-    result_out->completion_code = 0;
-    result_out->started_ns = 1000;
-    result_out->completed_ns = 2000;
+    result_out->completion_code = node->state == AI_WORK_FAILED ? -NEXORA_EIO : 0;
+    /* No monotonic kernel clock is wired yet; never fabricate timestamps. */
+    result_out->started_ns = 0;
+    result_out->completed_ns = 0;
 
     return NEXORA_OK;
 }
