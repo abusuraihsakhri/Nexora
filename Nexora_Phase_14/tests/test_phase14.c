@@ -592,7 +592,8 @@ static void test_exception_handling_fixup_and_recovery(void) {
     };
     isr_common_handler(&uframe);
     CHECK(idt_page_fault_count() == pf_before + 2);
-    nexora_syscall_process_cleanup(&user_p);
+    CHECK(!user_p.alive);
+    CHECK(nexora_syscall_current_process() == NULL);
 }
 
 static void test_async_queue_scheduler(void) {
