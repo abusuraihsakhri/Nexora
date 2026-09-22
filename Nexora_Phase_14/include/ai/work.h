@@ -38,6 +38,7 @@ typedef struct ai_work_node {
     u32 priority;
     u64 deadline_ns;
     u32 device_mask;
+    u32 refcount;
 
     u64 dependencies[AI_MAX_DEPS];
     u32 dependency_count;
@@ -102,6 +103,7 @@ bool ai_work_dependencies_done(const ai_work_graph *graph, const ai_work_node *n
 void ai_work_refresh_states(ai_work_graph *graph);
 bool ai_work_graph_validate(const ai_work_graph *graph, ai_graph_validation *result);
 u32 ai_work_graph_done_count(const ai_work_graph *graph);
+bool ai_work_node_retain(ai_work_node *node);
 void ai_work_node_destroy(ai_work_graph *graph, ai_work_node *node);
 void ai_work_graph_destroy(ai_work_graph *graph);
 const char *ai_work_state_name(ai_work_state state);
