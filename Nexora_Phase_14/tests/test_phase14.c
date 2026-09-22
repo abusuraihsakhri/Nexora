@@ -478,6 +478,19 @@ static void test_ring3_elf_load_and_syscall(void) {
     CHECK(ret == NEXORA_OK);
     CHECK(tensor_h != 0);
 
+    /* Mapping is intentionally unavailable until a real user-VM mapping exists. */
+    struct nexora_tensor_map map_req = {
+        .struct_size = sizeof(map_req),
+        .flags = NEXORA_MAP_READ,
+        .offset = 0,
+        .length = 64,
+    };
+    uintptr_t mapped_address = 0;
+    ret = nexora_syscall_dispatch(NEXORA_SYS_AI_TENSOR_MAP, tensor_h,
+                                  (uintptr_t)&map_req, (uintptr_t)&mapped_address, 0, 0, 0);
+    CHECK(ret == NEXORA_ERR(NEXORA_ENOSYS));
+    CHECK(mapped_address == 0);
+
     /* Syscall: Work Submit */
     struct nexora_work_desc work_req = {
         .struct_size = sizeof(work_req),
@@ -501,10 +514,40 @@ static void test_ring3_elf_load_and_syscall(void) {
     CHECK(ret == NEXORA_OK);
     CHECK(work_res.state == NEXORA_WORK_DONE);
 
-    /* Syscall: Tensor Release */
+    /* Delegation retains the object: releasing the parent handle must not free it. */
+    struct nexora_process child_proc;
+    CHECK(nexora_process_init(&child_proc, 101, 1, UINTPTR_MAX) == NEXORA_OK);
+    nexora_process_set_parent(&child_proc, user_proc.pid);
+
+    struct nexora_cap_delegate delegate = {
+        .struct_size = sizeof(delegate),
+        .target_pid = child_proc.pid,
+        .source_handle = tensor_h,
+        .rights = NEXORA_RIGHT_READ | NEXORA_RIGHT_RELEASE,
+        .delegated_handle = 0,
+    };
+    ret = nexora_syscall_dispatch(NEXORA_SYS_AI_CAP_DELEGATE, (uintptr_t)&delegate, 0, 0, 0, 0, 0);
+    CHECK(ret == NEXORA_OK);
+    CHECK(delegate.delegated_handle != 0);
+
     ret = nexora_syscall_dispatch(NEXORA_SYS_AI_TENSOR_RELEASE, tensor_h, 0, 0, 0, 0, 0);
     CHECK(ret == NEXORA_OK);
 
+    void *delegated_object = NULL;
+    CHECK(nexora_handle_resolve(&child_proc.handles, delegate.delegated_handle,
+                                NEXORA_HANDLE_TENSOR, NEXORA_RIGHT_READ,
+                                &delegated_object, NULL) == NEXORA_OK);
+    CHECK(delegated_object != NULL);
+    CHECK(ai_tensor_validate((const ai_tensor *)delegated_object));
+
+    nexora_syscall_set_current_process(&child_proc);
+    ret = nexora_syscall_dispatch(NEXORA_SYS_AI_TENSOR_RELEASE,
+                                  delegate.delegated_handle, 0, 0, 0, 0, 0);
+    CHECK(ret == NEXORA_OK);
+    nexora_syscall_process_cleanup(&child_proc);
+    CHECK(!child_proc.alive);
+
+    nexora_syscall_set_current_process(&user_proc);
     nexora_syscall_process_cleanup(&user_proc);
     CHECK(!user_proc.alive);
 }
