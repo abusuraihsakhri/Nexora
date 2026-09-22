@@ -316,6 +316,37 @@ static void test_slab_tensor_churn(void) {
     CHECK(ai_tensor_total_bytes() == 0);
 }
 
+static void test_slab_page_reclamation(void) {
+    frame_init((uintptr_t)g_test_frame_pool, 1024);
+    slab_init();
+
+    kmem_cache_t *cache = kmem_cache_create("reclaim_test", 256, 16);
+    CHECK(cache != NULL);
+
+    void *objects[48] = {0};
+    bool allocated = true;
+    for (usize i = 0; i < 48; ++i) {
+        objects[i] = kmem_cache_alloc(cache);
+        if (!objects[i]) {
+            allocated = false;
+            break;
+        }
+    }
+    CHECK(allocated);
+    CHECK(kmem_cache_total_frames(cache) > 1);
+
+    for (usize i = 0; i < 48; ++i) {
+        if (objects[i]) kmem_cache_free(cache, objects[i]);
+    }
+
+    CHECK(kmem_cache_allocated_objects(cache) == 0);
+    CHECK(kmem_cache_total_frames(cache) == 1);
+
+    kmem_cache_destroy(cache);
+    CHECK(kmem_cache_total_frames(cache) == 0);
+    CHECK(frame_free_count() == 1024);
+}
+
 static void test_slab_work_node_churn(void) {
     ai_work_graph graph;
     ai_work_graph_init(&graph);
@@ -372,6 +403,10 @@ static void test_idt_and_privilege_boundary(void) {
     const struct idt_entry64 *gate3 = idt_get_entry(3);
     CHECK(gate3->selector == NEXORA_GDT_KERNEL_CODE);
     CHECK(gate3->type_attr == IDT_GATE_USER_TRAP); /* DPL=3, Present, 64-bit Interrupt */
+
+    const struct idt_entry64 *gate8 = idt_get_entry(8);
+    CHECK(gate8->selector == NEXORA_GDT_KERNEL_CODE);
+    CHECK(gate8->ist == 1); /* #DF uses dedicated TSS IST1 */
 
     const struct idt_entry64 *gate14 = idt_get_entry(14);
     CHECK(gate14->selector == NEXORA_GDT_KERNEL_CODE);
@@ -549,7 +584,7 @@ static void test_exception_handling_fixup_and_recovery(void) {
     };
     isr_common_handler(&uframe);
     CHECK(idt_page_fault_count() == pf_before + 2);
-    nexora_syscall_process_cleanup(&user_p);
+    CHECK(!user_p.alive);
 }
 
 static void test_async_queue_scheduler(void) {
@@ -594,6 +629,7 @@ int main(void) {
     test_malformed_ai_input_fuzz();
     test_frame_allocator_churn();
     test_slab_tensor_churn();
+    test_slab_page_reclamation();
     test_slab_work_node_churn();
     test_idt_and_privilege_boundary();
     test_ring3_elf_load_and_syscall();

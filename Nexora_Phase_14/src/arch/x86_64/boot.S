@@ -27,26 +27,24 @@ multiboot_header_end:
 
 .section .text
 .global _start
+.global stack_top
+.global nexora_multiboot_info_ptr
 .extern kmain
 
 .code32
 _start:
     cli
 
-    /* Preserve Multiboot2 information pointer from EBX. */
-    mov %ebx, %edi
+    /* Preserve the Multiboot2 information pointer before using EDI for REP. */
+    mov %ebx, nexora_multiboot_info_ptr
 
     /* Clear page tables. */
-    lea pml4_table, %eax
-    mov %eax, %edi
+    lea pml4_table, %edi
     xor %eax, %eax
     mov $((4096 * 3) / 4), %ecx
     rep stosl
 
-    /*
-     * PML4[0] -> PDPT
-     * PDPT[0] -> PD
-     */
+    /* PML4[0] -> PDPT; PDPT[0] -> PD. */
     lea pdpt_table, %eax
     or $0x3, %eax
     mov %eax, pml4_table
@@ -55,10 +53,7 @@ _start:
     or $0x3, %eax
     mov %eax, pdpt_table
 
-    /*
-     * Identity map first 1 GiB with 2 MiB pages.
-     * PD entry = physical_address | present | writable | huge_page
-     */
+    /* Identity-map the first 1 GiB with 2 MiB pages. */
     xor %ecx, %ecx
 1:
     mov %ecx, %eax
@@ -106,8 +101,8 @@ long_mode_start:
     xor %rbp, %rbp
 
     /*
-     * Multiboot2 pointer is not consumed yet in v0.1.
-     * kmain takes no arguments for now.
+     * The Multiboot2 pointer is retained in nexora_multiboot_info_ptr for the
+     * future physical-memory discovery path. kmain still takes no arguments.
      */
     call kmain
 
@@ -136,7 +131,13 @@ pdpt_table:
 pd_table:
     .skip 4096
 
+.align 4
+nexora_multiboot_info_ptr:
+    .skip 4
+
 .align 16
 stack_bottom:
     .skip 65536
 stack_top:
+
+.section .note.GNU-stack,"",@progbits

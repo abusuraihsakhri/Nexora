@@ -1,9 +1,6 @@
 .section .text
 .code64
 .global nexora_syscall_entry
-.global nexora_bsp_percpu
-.global nexora_syscall_kernel_rsp
-.global nexora_syscall_user_rsp
 .extern nexora_syscall_dispatch_frame
 .extern nexora_syscall_bad_rip_fault
 
@@ -13,9 +10,12 @@
  *   rdi,rsi,rdx,r10,r8,r9 = arguments 0..5
  *   rax = signed result
  *
- * Utilizes swapgs to address per-CPU stack storage via the %gs segment:
+ * swapgs selects struct nexora_percpu via IA32_KERNEL_GS_BASE:
  *   %gs:0 = kernel_rsp
  *   %gs:8 = user_rsp
+ *
+ * Storage for the BSP per-CPU structure lives in syscall_msr.c.  Assembly
+ * deliberately owns no duplicate data symbols.
  */
 nexora_syscall_entry:
     swapgs
@@ -40,21 +40,21 @@ nexora_syscall_entry:
     addq $8, %rsp
 
     /*
-     * Security check: Return RIP (at 64(%rsp)) must be a canonical user address.
-     * On Intel CPUs, executing SYSRET with a non-canonical RCX causes a #GP
-     * fault in Ring 0 with user stack/state (CVE-2012-0217).
-     * Lower half canonical user space requires bits 47..63 to be 0.
+     * SYSRET safety: lower-half canonical userspace requires bits 47..63
+     * to be zero. Unsafe return state takes the fail-closed kernel path.
      */
     movq 64(%rsp), %rcx
     movq %rcx, %rax
     shrq $47, %rax
-    jnz .Lsyscall_sysret_non_canonical
+    jnz .Lsyscall_bad_return
 
-    /*
-     * Preserve all syscall argument registers across the transition.  The
-     * userspace wrapper only declares RCX/R11 as architectural clobbers, so
-     * returning the argument registers prevents a compiler/kernel ABI mismatch.
-     */
+    /* Reject architecturally unsafe RFLAGS before SYSRET. */
+    movq 56(%rsp), %r11
+    movq %r11, %rax
+    andq $((1 << 14) | (1 << 17)), %rax /* NT or VM */
+    jnz .Lsyscall_bad_return
+
+    /* Preserve syscall argument registers across the transition. */
     movq 0(%rsp), %r9
     movq 8(%rsp), %r8
     movq 16(%rsp), %r10
@@ -69,8 +69,7 @@ nexora_syscall_entry:
     swapgs
     sysretq
 
-.Lsyscall_sysret_non_canonical:
-    /* Keep frame on stack and invoke safe kernel fault handler */
+.Lsyscall_bad_return:
     movq %rsp, %rdi
     subq $8, %rsp
     call nexora_syscall_bad_rip_fault
@@ -79,13 +78,4 @@ nexora_syscall_entry:
     hlt
     jmp 1b
 
-.section .data
-.align 16
-nexora_bsp_percpu:
-nexora_syscall_kernel_rsp:
-    .quad 0
-nexora_syscall_user_rsp:
-    .quad 0
-    .long 0
-    .long 0
-    .quad 0, 0, 0, 0
+.section .note.GNU-stack,"",@progbits

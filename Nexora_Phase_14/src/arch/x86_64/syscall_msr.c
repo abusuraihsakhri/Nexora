@@ -14,8 +14,6 @@ extern void nexora_syscall_entry(void);
 #endif
 
 struct nexora_percpu nexora_bsp_percpu;
-uintptr_t nexora_syscall_kernel_rsp = 0;
-uintptr_t nexora_syscall_user_rsp = 0;
 static bool s_syscall_initialized = false;
 
 #if !defined(HOST_TEST)
@@ -35,7 +33,6 @@ static void wrmsr(u32 msr, u64 value) {
 void nexora_x86_syscall_init(uintptr_t kernel_stack_top) {
     uintptr_t aligned_stack_top = kernel_stack_top & ~(uintptr_t)0xFull;
     nexora_percpu_init(&nexora_bsp_percpu, 0, aligned_stack_top);
-    nexora_syscall_kernel_rsp = aligned_stack_top;
     nexora_x86_set_kernel_stack(aligned_stack_top);
 
 #if !defined(HOST_TEST)
@@ -51,10 +48,10 @@ void nexora_x86_syscall_init(uintptr_t kernel_stack_top) {
     wrmsr(IA32_STAR, star);
     wrmsr(IA32_LSTAR, (u64)(uintptr_t)&nexora_syscall_entry);
 
-    /* Program KERNEL_GS_BASE so swapgs maps %gs to per-CPU data */
+    /* swapgs selects the single BSP per-CPU record until SMP bring-up exists. */
     wrmsr(IA32_KERNEL_GS_BASE, (u64)(uintptr_t)&nexora_bsp_percpu);
 
-    /* Clear IF, TF, DF and AC while in the kernel. */
+    /* Clear IF, TF, DF and AC while executing in the kernel. */
     wrmsr(IA32_FMASK, (1ull << 9) | (1ull << 8) | (1ull << 10) | (1ull << 18));
 #endif
     s_syscall_initialized = true;

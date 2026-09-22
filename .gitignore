@@ -4,7 +4,22 @@
 *.o
 *.exe
 *.iso
+*.elf
 
-# OS metadata
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Generated reports and local archives
+*.log
+*.tmp
+*.zip
+
+# Editor / OS metadata
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/

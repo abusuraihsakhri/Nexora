@@ -1,0 +1,68 @@
+name: Nexora CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+
+jobs:
+  phase14-kernel:
+    name: Phase 14 kernel build + host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test Phase 14
+        run: make -C Nexora_Phase_14 verify-phase14
+
+  phase15-bench:
+    name: Phase 15 benchmark tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run benchmark self-tests
+        run: make -C Nexora_Phase_15 test
+
+  phase16-validation:
+    name: Phase 16 validation + sanitizers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run Phase 16 tests
+        run: make -C Nexora_Phase_16 -f Makefile.phase16 test
+      - name: Run ASan/UBSan
+        run: make -C Nexora_Phase_16 -f Makefile.phase16 sanitize
+
+  phase17-release-gate:
+    name: Phase 17 release gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify trusted manifest and run gate
+        working-directory: Nexora_Phase_17
+        run: python3 tools/release_gate.py
+
+  docs:
+    name: Documentation checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate static Pages documents
+        run: python3 tools/validate_docs.py

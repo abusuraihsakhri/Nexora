@@ -22,3 +22,5 @@ nexora_x86_enter_user:
 1:
     hlt
     jmp 1b
+
+.section .note.GNU-stack,"",@progbits

@@ -10,10 +10,15 @@
 static ai_work_graph g_unified_graph;
 static bool g_graph_initialized = false;
 
+/*
+ * Delegation is disabled until AI objects have real lifetime accounting.
+ * Returning success here used to create aliased handles to objects that could
+ * subsequently be freed, yielding use-after-free and double-release hazards.
+ */
 static nexora_status_t ai_bridge_retain(uint8_t handle_type, void *object) {
     (void)handle_type;
     (void)object;
-    return NEXORA_OK;
+    return NEXORA_ERR(NEXORA_ENOSYS);
 }
 
 static nexora_status_t ai_bridge_tensor_create(
@@ -35,12 +40,14 @@ static nexora_status_t ai_bridge_tensor_create(
         desc->flags,
         &t
     );
-    if (rc != 0 || !t) {
-        return NEXORA_ERR(NEXORA_ENOMEM);
-    }
+    if (rc != 0 || !t) return NEXORA_ERR(NEXORA_ENOMEM);
 
     *object_out = t;
-    *rights_out = NEXORA_RIGHT_READ | NEXORA_RIGHT_WRITE | NEXORA_RIGHT_MAP | NEXORA_RIGHT_RELEASE;
+    /*
+     * MAP is intentionally not granted yet: Phase 14 has no userspace VM
+     * mapping primitive or tensor backing-store object.
+     */
+    *rights_out = NEXORA_RIGHT_READ | NEXORA_RIGHT_WRITE | NEXORA_RIGHT_RELEASE;
     return NEXORA_OK;
 }
 
@@ -54,9 +61,12 @@ static nexora_status_t ai_bridge_tensor_map(
     (void)request;
     if (!tensor_object || !user_address_out) return NEXORA_ERR(NEXORA_EINVAL);
 
-    /* Return pointer to tensor descriptor memory buffer */
-    *user_address_out = (uintptr_t)tensor_object;
-    return NEXORA_OK;
+    /*
+     * Fail closed until a real mapping path exists.  Never expose a kernel
+     * descriptor address as a userspace tensor mapping.
+     */
+    *user_address_out = 0;
+    return NEXORA_ERR(NEXORA_ENOSYS);
 }
 
 static nexora_status_t ai_bridge_tensor_release(
@@ -94,23 +104,16 @@ static nexora_status_t ai_bridge_work_submit(
         desc->device_mask,
         &node
     );
-    if (rc != 0 || !node) {
-        return NEXORA_ERR(NEXORA_ENOMEM);
-    }
+    if (rc != 0 || !node) return NEXORA_ERR(NEXORA_ENOMEM);
 
-    /* Attach input and output tensors */
     if (input_objects) {
         for (u32 i = 0; i < desc->input_count; ++i) {
-            if (input_objects[i]) {
-                (void)ai_work_add_input_safe(node, (ai_tensor *)input_objects[i]);
-            }
+            if (input_objects[i]) (void)ai_work_add_input_safe(node, (ai_tensor *)input_objects[i]);
         }
     }
     if (output_objects) {
         for (u32 i = 0; i < desc->output_count; ++i) {
-            if (output_objects[i]) {
-                (void)ai_work_add_output_safe(node, (ai_tensor *)output_objects[i]);
-            }
+            if (output_objects[i]) (void)ai_work_add_output_safe(node, (ai_tensor *)output_objects[i]);
         }
     }
 
@@ -129,8 +132,6 @@ static nexora_status_t ai_bridge_work_wait(
     if (!work_object || !result_out) return NEXORA_ERR(NEXORA_EINVAL);
 
     ai_work_node *node = (ai_work_node *)work_object;
-
-    /* Schedule graph execution to completion */
     if (g_graph_initialized) {
         ai_scheduler scheduler;
         ai_scheduler_init(&scheduler, &g_unified_graph);
@@ -142,9 +143,9 @@ static nexora_status_t ai_bridge_work_wait(
     result_out->state = (uint32_t)node->state;
     result_out->device_id = 0;
     result_out->completion_code = 0;
-    result_out->started_ns = 1000;
-    result_out->completed_ns = 2000;
-
+    /* Timing is unavailable in this prototype; zero means not measured. */
+    result_out->started_ns = 0;
+    result_out->completed_ns = 0;
     return NEXORA_OK;
 }
 
@@ -154,9 +155,7 @@ static nexora_status_t ai_bridge_work_release(
 ) {
     (void)process;
     if (!work_object) return NEXORA_ERR(NEXORA_EINVAL);
-    if (g_graph_initialized) {
-        ai_work_node_destroy(&g_unified_graph, (ai_work_node *)work_object);
-    }
+    if (g_graph_initialized) ai_work_node_destroy(&g_unified_graph, (ai_work_node *)work_object);
     return NEXORA_OK;
 }
 
@@ -175,9 +174,7 @@ static nexora_status_t ai_bridge_device_query(
     info_out->memory_bytes = 1024 * 1024 * 1024ull;
     info_out->feature_bits = 0x7;
     const char dev_name[] = "Nexora-Unified-CPU";
-    for (usize i = 0; i < sizeof(dev_name); ++i) {
-        info_out->name[i] = dev_name[i];
-    }
+    for (usize i = 0; i < sizeof(dev_name); ++i) info_out->name[i] = dev_name[i];
     return NEXORA_OK;
 }
 

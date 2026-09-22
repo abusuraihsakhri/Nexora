@@ -1,5 +1,7 @@
 #include <kernel/x86_64.h>
 
+#define NEXORA_DOUBLE_FAULT_STACK_SIZE 16384u
+
 struct __attribute__((packed)) gdtr64 {
     u16 limit;
     u64 base;
@@ -25,6 +27,7 @@ struct __attribute__((packed)) tss64 {
 
 static u64 gdt[7] __attribute__((aligned(16)));
 static struct tss64 tss __attribute__((aligned(16)));
+static u8 double_fault_stack[NEXORA_DOUBLE_FAULT_STACK_SIZE] __attribute__((aligned(16)));
 static bool gdt_loaded = false;
 
 static void set_tss_descriptor(u64 base, u32 limit) {
@@ -54,6 +57,8 @@ void nexora_x86_gdt_init(uintptr_t rsp0) {
     gdt[4] = 0x00AFFA000000FFFFull; /* ring-3 64-bit code */
 
     tss.rsp0 = (u64)rsp0;
+    /* IST1 is reserved for #DF so stack corruption cannot strand the handler. */
+    tss.ist1 = (u64)(uintptr_t)&double_fault_stack[NEXORA_DOUBLE_FAULT_STACK_SIZE];
     tss.iomap_base = sizeof(tss);
     set_tss_descriptor((u64)(uintptr_t)&tss, (u32)(sizeof(tss) - 1u));
 
