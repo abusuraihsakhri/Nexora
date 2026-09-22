@@ -13,6 +13,11 @@ This is deliberately **not a Linux clone**. The initial design treats these as f
 
 The current version is a bootable research skeleton. It does **not** yet run real GPU/NPU kernels.
 
+> **Execution scope:** v0.1 is intentionally **uniprocessor (UP-only)**. Global allocator,
+> process, graph, and registry state is not advertised as SMP-safe. QEMU is therefore
+> run with one virtual CPU until AP startup, per-CPU ownership, and synchronization are
+> implemented and validated.
+
 ## What already works
 
 - Multiboot2 boot through GRUB
