@@ -89,6 +89,7 @@ i32 ai_tensor_create_safe(
     t->location = location;
     t->flags = flags;
     t->reuse_hint = 0;
+    t->refcount = 1;
     t->bytes = bytes;
 
     for (u32 i = 0; i < AI_MAX_DIMS; ++i) {
@@ -144,11 +145,21 @@ bool ai_tensor_validate(const ai_tensor *tensor) {
     return true;
 }
 
-void ai_tensor_destroy(ai_tensor *t) {
-    if (!t) return;
+bool ai_tensor_retain(ai_tensor *t) {
+    if (!t || t->refcount == 0 || t->refcount == ~0u) return false;
+    t->refcount++;
+    return true;
+}
 
+void ai_tensor_destroy(ai_tensor *t) {
+    if (!t || t->refcount == 0) return;
+    t->refcount--;
+    if (t->refcount != 0) return;
+
+    bool registered = false;
     for (u64 i = 0; i < count; ++i) {
         if (registry[i] == t) {
+            registered = true;
             if (total_bytes >= t->bytes) {
                 total_bytes -= t->bytes;
             } else {
@@ -169,7 +180,7 @@ void ai_tensor_destroy(ai_tensor *t) {
         }
     }
 
-    if (ai_tensor_cache) {
+    if (registered && ai_tensor_cache) {
         kmem_cache_free(ai_tensor_cache, t);
     }
 }
