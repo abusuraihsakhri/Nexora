@@ -2,6 +2,7 @@
 #include <nexora/backend.h>
 #include <nexora/uaccess.h>
 #include <nexora/handle.h>
+#include <kernel/x86_64.h>
 #include <stddef.h>
 
 _Static_assert(offsetof(struct nexora_syscall_frame, r9) == 0, "syscall frame r9 offset");
@@ -15,19 +16,17 @@ _Static_assert(offsetof(struct nexora_syscall_frame, user_rflags) == 56, "syscal
 _Static_assert(offsetof(struct nexora_syscall_frame, user_rip) == 64, "syscall frame rip offset");
 _Static_assert(sizeof(struct nexora_syscall_frame) == 72, "syscall frame size");
 
-static struct nexora_process *current_process;
-
 static void zero_bytes(void *ptr, size_t length) {
     unsigned char *p = (unsigned char *)ptr;
     for (size_t i = 0; i < length; ++i) p[i] = 0;
 }
 
 void nexora_syscall_set_current_process(struct nexora_process *process) {
-    current_process = process;
+    nexora_bsp_percpu.current_process = (uintptr_t)process;
 }
 
 struct nexora_process *nexora_syscall_current_process(void) {
-    return current_process;
+    return (struct nexora_process *)nexora_bsp_percpu.current_process;
 }
 
 static void release_resource(const struct nexora_backend_ops *ops,
@@ -56,12 +55,12 @@ void nexora_syscall_process_cleanup(struct nexora_process *process) {
         slot->generation = (uint16_t)(slot->generation + 1u);
         if (slot->generation == 0) slot->generation = 1;
     }
-    if (current_process == process) current_process = NULL;
+    if (nexora_syscall_current_process() == process) nexora_syscall_set_current_process(NULL);
     (void)nexora_process_unregister(process);
 }
 
 static nexora_status_t require_process(struct nexora_process **process_out) {
-    struct nexora_process *process = current_process;
+    struct nexora_process *process = nexora_syscall_current_process();
     if (!process || !process->alive) return NEXORA_ERR(NEXORA_EPERM);
     *process_out = process;
     return NEXORA_OK;
@@ -351,7 +350,7 @@ void nexora_syscall_dispatch_frame(struct nexora_syscall_frame *frame) {
 
 void nexora_syscall_bad_rip_fault(struct nexora_syscall_frame *frame) {
     (void)frame;
-    struct nexora_process *process = current_process;
+    struct nexora_process *process = nexora_syscall_current_process();
     if (process) {
         process->alive = false;
         nexora_syscall_process_cleanup(process);
