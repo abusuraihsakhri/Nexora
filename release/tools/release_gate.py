@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, json, os, shutil, subprocess, sys
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -10,7 +16,7 @@ def run(cmd, cwd: Path) -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Nexora Phase 17 release-candidate gate")
+    ap = argparse.ArgumentParser(description="Nexora release-candidate gate")
     ap.add_argument("--root", default=str(Path(__file__).resolve().parents[1]))
     ap.add_argument("--skip-build", action="store_true")
     ns = ap.parse_args()
@@ -23,6 +29,14 @@ def main() -> int:
         print("missing required files:", *missing, sep="\n - ")
         return 2
 
+    manifest = root / "PHASE17_MANIFEST.json"
+    if not manifest.is_file():
+        print("committed integrity manifest is missing")
+        return 4
+
+    # Verify the trusted, committed baseline before running any build step.
+    run([sys.executable, str(root / "tools/verify_manifest.py"), str(manifest)], root)
+
     if not ns.skip_build:
         if shutil.which(os.environ.get("CC", "cc")) is None:
             print("C compiler unavailable")
@@ -30,9 +44,9 @@ def main() -> int:
         run(["sh", str(root / "tests/run_tests.sh")], root)
 
     run([sys.executable, str(root / "tools/benchmark_smoke.py"), "--runs", "3", "--json"], root)
-    run([sys.executable, str(root / "tools/make_manifest.py"), str(root)], root)
-    run([sys.executable, str(root / "tools/verify_manifest.py"), str(root / "PHASE17_MANIFEST.json")], root)
-    print("PHASE 17 RELEASE GATE: PASS")
+    print("NEXORA RELEASE GATE: PASS")
     return 0
 
-if __name__ == "__main__": raise SystemExit(main())
+
+if __name__ == "__main__":
+    raise SystemExit(main())
