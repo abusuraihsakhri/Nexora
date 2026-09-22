@@ -1,187 +1,251 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Conceptual Nexora x86-64 boot and privilege-transition study.">
+  <meta name="description" content="Interactive Nexora x86-64 boot, privilege-boundary and userspace-transition study.">
+  <meta name="theme-color" content="#f6f7f4">
   <title>Nexora — Boot & privilege-boundary study</title>
   <link rel="stylesheet" href="academia.css">
+  <script>
+    try {
+      if (localStorage.getItem("nexora-theme") === "dark") {
+        document.documentElement.dataset.theme = "dark";
+      }
+    } catch (_) {}
+  </script>
 </head>
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a class="wordmark" href="index.html"><strong>NEXORA</strong><span>Machine study · x86-64</span></a>
+    <a class="wordmark" href="index.html" aria-label="Nexora home">
+      <strong>NEXORA</strong><span>x86-64 machine study</span>
+    </a>
     <nav aria-label="Primary">
       <a href="index.html">Architecture</a>
       <a class="active" href="boot-sim.html">Boot study</a>
-      <a href="https://github.com/abusuraihsakhri/Nexora">Repository</a>
+      <a href="index.html#status">Status</a>
+      <a href="https://github.com/abusuraihsakhri/Nexora">GitHub</a>
     </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle light and dark theme">
+      <span data-theme-icon>◐</span><span data-theme-label>Dark</span>
+    </button>
   </div>
 </header>
 
 <main>
-  <div class="kicker">Interactive proof plate · conceptual simulator</div>
-  <h1 style="font-size:clamp(2.2rem,6vw,5rem);color:#f1e6d3;margin:0 0 24px;">Boot & privilege-boundary study</h1>
-  <div class="notice">
-    <strong>Interpretation note.</strong> This page is an explanatory state-machine model, not a live emulator and not evidence that
-    every transition shown is currently exercised end-to-end at boot. The Phase 14 kernel has host-tested GDT/TSS/IDT, syscall-frame
-    and ELF-validation components; full process VM, Ring-3 fault recovery and production SMP remain active engineering work.
-  </div>
+  <section class="study-hero reveal is-visible">
+    <div class="study-title">
+      <div class="eyebrow">Interactive systems study · x86-64</div>
+      <h1>From boot handoff to a future Ring-3 process.</h1>
+      <p class="lede">
+        This page walks through the kernel’s current boot and privilege-boundary mechanisms, then marks the point where
+        validated prototype code ends and the next process-VM work begins.
+      </p>
+    </div>
 
-  <div class="controls">
-    <button class="primary" id="next" onclick="stepSim()">Advance plate</button>
-    <button id="play" onclick="toggleAuto()">Auto study</button>
-    <button onclick="resetSim()">Reset</button>
-  </div>
-
-  <div class="sim-shell">
-    <section class="panel">
-      <div class="chrome-label" style="color:var(--brass);margin-bottom:14px;">01 · Transition ledger</div>
-      <h2>Execution stages</h2>
-      <div id="stages" class="stage-list"></div>
-
-      <div class="chrome-label" style="color:var(--brass);margin:28px 0 12px;">02 · Commentary</div>
-      <div id="terminal" class="terminal" aria-live="polite"></div>
-    </section>
-
-    <aside class="panel">
-      <div class="chrome-label" style="color:var(--brass);margin-bottom:14px;">03 · Machine state</div>
-      <h3 id="privilege">Ring 0 · supervisor</h3>
-      <table class="regs">
-        <tr><td>RIP</td><td id="rip"></td></tr>
-        <tr><td>RSP</td><td id="rsp"></td></tr>
-        <tr><td>CS / SS</td><td id="segments"></td></tr>
-        <tr><td>GS base</td><td id="gs"></td></tr>
-        <tr><td>User RSP</td><td id="ursp"></td></tr>
-        <tr><td>GDT / TSS</td><td id="gdt"></td></tr>
-        <tr><td>IDT</td><td id="idt"></td></tr>
-        <tr><td>Memory note</td><td id="heap"></td></tr>
-      </table>
+    <aside class="study-summary">
+      <div class="eyebrow">How to read this page</div>
+      <p>
+        The timeline is an explanatory state model—not a CPU emulator. Stages tagged <strong>Implemented</strong> correspond
+        to mechanisms present in the current Phase 14 source tree. “Design target” stages explain the intended path that still
+        requires end-to-end integration.
+      </p>
+      <div class="flow" style="margin-top:20px;">
+        <span class="status-chip">host tested</span>
+        <span class="status-chip">kernel linked</span>
+        <span class="status-chip pending">Ring-3 incomplete</span>
+      </div>
     </aside>
-  </div>
+  </section>
+
+  <section class="notice reveal">
+    <strong>Current scope.</strong> The repository CI validates the Phase 14 host tests and freestanding kernel link. The kernel
+    remains a uniprocessor research prototype; full process address spaces, runnable user processes, real tensor-backed mappings
+    and scheduler handoff after fatal user faults are still engineering work.
+  </section>
+
+  <section class="reveal" aria-labelledby="sim-title">
+    <div class="sim-toolbar">
+      <button class="control primary" type="button" onclick="stepSim()">Advance</button>
+      <button class="control" id="play" type="button" onclick="toggleAuto()">Auto play</button>
+      <button class="control" type="button" onclick="resetSim()">Reset</button>
+      <div class="progress-wrap" aria-label="Study progress">
+        <div class="progress-track"><div class="progress-value" id="stage-progress"></div></div>
+        <span id="stage-count">1 / 7</span>
+      </div>
+    </div>
+
+    <div class="sim-shell">
+      <section class="panel">
+        <div class="panel-title">
+          <div>
+            <div class="chrome-label">01 · Transition ledger</div>
+            <h2 id="sim-title">Execution stages</h2>
+          </div>
+        </div>
+
+        <div id="stages" class="stage-list"></div>
+
+        <article class="stage-detail" aria-live="polite">
+          <div class="stage-detail-head">
+            <h3 id="stage-title">Multiboot2 handoff</h3>
+            <span class="status-chip" id="stage-fact">Implemented</span>
+          </div>
+          <p id="stage-detail"></p>
+        </article>
+
+        <div class="chrome-label" style="margin:26px 0 10px;">02 · Commentary log</div>
+        <div id="terminal" class="terminal" aria-live="polite"></div>
+      </section>
+
+      <aside class="panel">
+        <div class="panel-title">
+          <div>
+            <div class="chrome-label">03 · Machine state</div>
+            <h3 id="privilege">Ring 0</h3>
+          </div>
+        </div>
+
+        <table class="regs">
+          <tbody>
+            <tr><td>RIP</td><td id="rip"></td></tr>
+            <tr><td>RSP</td><td id="rsp"></td></tr>
+            <tr><td>CS / SS</td><td id="segments"></td></tr>
+            <tr><td>GS base</td><td id="gs"></td></tr>
+            <tr><td>User RSP</td><td id="ursp"></td></tr>
+            <tr><td>GDT / TSS</td><td id="gdt"></td></tr>
+            <tr><td>IDT</td><td id="idt"></td></tr>
+            <tr><td>Memory state</td><td id="heap"></td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout" style="margin-top:20px;">
+          <strong>Important:</strong> state labels on this page are explanatory. They summarize the intended machine state at each
+          stage; they are not live register reads from QEMU.
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="content-section reveal" id="implemented" data-section>
+    <div class="section-label">04 · Implemented</div>
+    <div class="section-body">
+      <h2>What the kernel already has.</h2>
+      <p class="section-intro">
+        The current x86-64 path contains enough low-level machinery to test privilege and ABI concepts, but not yet enough to
+        claim a production userspace execution model.
+      </p>
+
+      <div class="three-col">
+        <article class="card">
+          <span class="card-index">BOOT</span>
+          <h3>Multiboot2 + long mode</h3>
+          <p>The assembly entry preserves the Multiboot information pointer, creates early page tables, enables long mode and transfers control into the 64-bit kernel.</p>
+        </article>
+        <article class="card">
+          <span class="card-index">PRIVILEGE</span>
+          <h3>GDT, TSS and IDT</h3>
+          <p>Kernel/user selectors, TSS.rsp0 and a 256-entry IDT establish the intended privilege boundary. Double faults use a dedicated IST stack.</p>
+        </article>
+        <article class="card">
+          <span class="card-index">SYSCALL</span>
+          <h3>SYSCALL / SYSRET path</h3>
+          <p>The kernel configures MSRs, saves user state through a BSP per-CPU record and checks unsafe return RIP/RFLAGS before SYSRET.</p>
+        </article>
+        <article class="card">
+          <span class="card-index">MEMORY</span>
+          <h3>Frame + slab allocation</h3>
+          <p>A bitmap frame allocator and slab caches support kernel objects. Excess completely free slab pages can be returned to the frame allocator.</p>
+        </article>
+        <article class="card">
+          <span class="card-index">ELF64</span>
+          <h3>Strict image validation</h3>
+          <p>The loader validates headers, machine type, segment bounds, W^X, overlap, entry placement, alignment and integer-overflow conditions.</p>
+        </article>
+        <article class="card">
+          <span class="card-index">FAULTS</span>
+          <h3>Fail-closed exceptions</h3>
+          <p>Recoverable fixups can redirect selected kernel faults. Unhandled kernel faults no longer return to the faulting instruction; fatal user faults mark the process dead in host tests.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="content-section reveal" id="boundary" data-section>
+    <div class="section-label">05 · Boundary</div>
+    <div class="section-body">
+      <h2>Where the current implementation stops.</h2>
+      <p class="section-intro">
+        Several pieces exist independently, but the missing process-memory layer prevents them from forming a complete user-program
+        execution path. This is the most important architectural boundary to understand in the current repository.
+      </p>
+
+      <div class="two-col">
+        <article class="paper">
+          <div class="eyebrow">Already concrete</div>
+          <div class="paper-rule"><span class="num">01</span><p>ELF64 validation can decide whether an image is structurally acceptable.</p></div>
+          <div class="paper-rule"><span class="num">02</span><p>GDT/TSS/IDT and syscall MSRs establish the low-level privilege transition machinery.</p></div>
+          <div class="paper-rule"><span class="num">03</span><p>User-address checks, handle tables and ABI structures exist and are exercised in host tests.</p></div>
+          <div class="paper-rule"><span class="num">04</span><p>Fault handlers now fail closed rather than retrying unrecoverable instructions indefinitely.</p></div>
+        </article>
+
+        <article class="paper">
+          <div class="eyebrow">Still required</div>
+          <div class="paper-rule"><span class="num">01</span><p>Per-process page tables and a real VM mapper for ELF segments and user stacks.</p></div>
+          <div class="paper-rule"><span class="num">02</span><p>A runnable-process scheduler capable of switching away from terminated or blocked user contexts.</p></div>
+          <div class="paper-rule"><span class="num">03</span><p>Reference-counted kernel objects so delegated handles cannot outlive underlying resources.</p></div>
+          <div class="paper-rule"><span class="num">04</span><p>Real tensor backing storage and controlled user mappings rather than metadata-only tensor objects.</p></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="content-section reveal" id="faults" data-section>
+    <div class="section-label">06 · Fault model</div>
+    <div class="section-body">
+      <h2>Exception handling should make progress or stop safely.</h2>
+      <p class="section-intro">
+        The original audit identified a dangerous pattern: an unrecoverable fault handler could return and immediately execute the
+        same faulting instruction again. The current path distinguishes fixup-capable faults from fatal exceptions.
+      </p>
+
+      <div class="fact-grid">
+        <article class="fact-card"><h3>Kernel fault + fixup</h3><p>A registered fixup can rewrite the saved RIP and continue through a controlled recovery path.</p></article>
+        <article class="fact-card"><h3>Kernel fault, no fixup</h3><p>The handler fails closed rather than IRET-ing back into an unrecoverable kernel instruction.</p></article>
+        <article class="fact-card"><h3>User fault</h3><p>The process is marked dead; the next major step is scheduling another runnable process instead of stopping the research kernel.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="content-section reveal" id="next" data-section>
+    <div class="section-label">07 · Next</div>
+    <div class="section-body">
+      <h2>The next boot milestone is a real process address space.</h2>
+      <p class="section-intro">
+        More assembly is not the main need. The next milestone is the glue between the validated ELF parser, physical allocator,
+        privilege structures and scheduler: a coherent virtual-memory/process model.
+      </p>
+
+      <div class="timeline">
+        <article class="timeline-item"><h3>Create per-process page tables</h3><p>Define page-table ownership, kernel mappings, user ranges, teardown, TLB semantics and address-space switching.</p></article>
+        <article class="timeline-item"><h3>Map validated ELF segments</h3><p>Allocate frames, copy file-backed bytes, zero BSS, enforce W^X and roll back cleanly if any mapping step fails.</p></article>
+        <article class="timeline-item"><h3>Construct a user stack</h3><p>Map stack pages with guard regions and define the initial ABI contract for entry state and future argument passing.</p></article>
+        <article class="timeline-item"><h3>Enter Ring 3 for real</h3><p>Use the existing privilege structures to transfer to a mapped ELF entry with a mapped user stack and observable syscall round-trip.</p></article>
+        <article class="timeline-item"><h3>Handle fatal user faults by scheduling</h3><p>Terminate the faulting process, release owned handles/resources, select another runnable context and resume kernel progress.</p></article>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer class="site-footer">
-  <div class="header-inner">NEXORA · explanatory simulator · values are illustrative unless explicitly stated otherwise</div>
+  <div class="footer-inner">
+    <span>NEXORA · x86-64 boot & privilege study</span>
+    <span>Explanatory model · not a hardware emulator</span>
+  </div>
 </footer>
 
-<script>
-const stages = [
-  {
-    name: "Long-mode entry",
-    cpl: 0, rip: "0x00100000", rsp: "kernel stack", segments: "kernel selectors",
-    gs: "not installed", ursp: "—", gdt: "early / pending", idt: "pending", heap: "early boot",
-    log: "The historical kernel enters x86-64 long mode from a Multiboot2 path. The current prototype identity-maps a bounded early region; general VM setup is not represented here."
-  },
-  {
-    name: "Physical memory prototype",
-    cpl: 0, rip: "kernel", rsp: "kernel stack", segments: "Ring 0",
-    gs: "not installed", ursp: "—", gdt: "pending", idt: "pending", heap: "frame bitmap + slab",
-    log: "Phase 14 contains a bitmap frame allocator and slab caches. The boot path still initializes a fixed test-oriented physical range rather than parsing the platform memory map."
-  },
-  {
-    name: "Privilege structures",
-    cpl: 0, rip: "kernel", rsp: "TSS rsp0", segments: "Ring 0",
-    gs: "BSP per-CPU record", ursp: "0", gdt: "loaded + TSS", idt: "256-vector table", heap: "kernel allocators",
-    log: "GDT, TSS and IDT structures establish the intended privilege boundary. The current implementation is explicitly BSP/single-core until AP bring-up and synchronization are implemented."
-  },
-  {
-    name: "Syscall entry contract",
-    cpl: 0, rip: "LSTAR target", rsp: "%gs:0 kernel_rsp", segments: "SYSCALL contract",
-    gs: "kernel per-CPU", ursp: "%gs:8 saved", gdt: "active", idt: "active", heap: "kernel allocators",
-    log: "SYSCALL uses swapgs and a single owned per-CPU record. The return path checks lower-half canonical RIP and rejects unsafe NT/VM RFLAGS before SYSRET."
-  },
-  {
-    name: "ELF64 validation",
-    cpl: 0, rip: "validated entry", rsp: "future user stack", segments: "candidate Ring 3",
-    gs: "kernel per-CPU", ursp: "future mapping", gdt: "active", idt: "active", heap: "mapping callback model",
-    log: "The ELF loader validates class, machine, segment bounds, W^X, overlap and executable entry placement. Host tests use an abstract mapping callback; a complete process VM mapper is not yet the boot-time path."
-  },
-  {
-    name: "Userspace transition — design target",
-    cpl: 3, rip: "user canonical VA", rsp: "user stack", segments: "Ring 3 selectors",
-    gs: "user view", ursp: "user stack", gdt: "active", idt: "active", heap: "isolated user VM required",
-    log: "This plate marks the intended Ring-3 execution state. It should be read as a target transition until boot-time ELF mapping, process address spaces and fault-to-scheduler recovery are integrated end-to-end."
-  },
-  {
-    name: "Fault and return discipline",
-    cpl: 0, rip: "exception / syscall handler", rsp: "kernel stack", segments: "Ring 0",
-    gs: "kernel per-CPU", ursp: "saved user state", gdt: "active", idt: "active", heap: "fail-closed paths",
-    log: "Recoverable kernel uaccess requires explicit fixups. Unrecoverable kernel faults must not resume the faulting instruction; user-fault termination requires scheduler/process handoff rather than an immediate IRET retry."
-  }
-];
-
-let index = 0;
-let timer = null;
-
-function esc(s) {
-  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-function renderStages() {
-  document.getElementById("stages").innerHTML = stages.map((s, i) => {
-    const cls = i < index ? "stage complete" : i === index ? "stage active" : "stage";
-    const state = i < index ? "studied" : i === index ? "current" : "queued";
-    return '<div class="' + cls + '"><span class="num">' + String(i + 1).padStart(2, "0") +
-      '</span><span>' + esc(s.name) + '</span><span class="badge">' + state + '</span></div>';
-  }).join("");
-}
-
-function renderState(appendLog = true) {
-  const s = stages[index];
-  document.getElementById("privilege").textContent = s.cpl === 0 ? "Ring 0 · supervisor" : "Ring 3 · design target";
-  for (const key of ["rip","rsp","segments","gs","ursp","gdt","idt","heap"]) {
-    document.getElementById(key).textContent = s[key];
-  }
-  if (appendLog) {
-    const terminal = document.getElementById("terminal");
-    const p = document.createElement("div");
-    p.textContent = "[" + String(index + 1).padStart(2, "0") + "] " + s.log;
-    p.style.marginBottom = "12px";
-    terminal.appendChild(p);
-    terminal.scrollTop = terminal.scrollHeight;
-  }
-  renderStages();
-}
-
-function stepSim() {
-  if (index < stages.length - 1) {
-    index += 1;
-    renderState(true);
-  } else {
-    stopAuto();
-  }
-}
-
-function toggleAuto() {
-  if (timer) {
-    stopAuto();
-    return;
-  }
-  document.getElementById("play").textContent = "Pause";
-  timer = setInterval(() => {
-    if (index < stages.length - 1) stepSim();
-    else stopAuto();
-  }, 1700);
-}
-
-function stopAuto() {
-  if (timer) clearInterval(timer);
-  timer = null;
-  document.getElementById("play").textContent = "Auto study";
-}
-
-function resetSim() {
-  stopAuto();
-  index = 0;
-  document.getElementById("terminal").innerHTML = "";
-  renderState(true);
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-  renderStages();
-  renderState(true);
-});
-</script>
+<script src="site.js"></script>
+<script src="boot-sim.js"></script>
 </body>
 </html>
