@@ -139,7 +139,7 @@ void idt_init(void) {
     }
 
     idt_set_gate(3, (void *)&isr3_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_USER_TRAP, 0);
-    idt_set_gate(8, (void *)&isr8_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_INTERRUPT, 0);
+    idt_set_gate(8, (void *)&isr8_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_INTERRUPT, 1);
     idt_set_gate(13, (void *)&isr13_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_INTERRUPT, 0);
     idt_set_gate(14, (void *)&isr14_entry, NEXORA_GDT_KERNEL_CODE, IDT_GATE_INTERRUPT, 0);
 
