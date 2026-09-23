@@ -596,15 +596,17 @@ Nexora establishes explicit boundaries relative to existing projects:
 
 ---
 
-# 10. What Nexora Must NOT Build Initially
+# 10. Deliberate Scope Boundaries
 
-* ❌ **Do not build a modern NVIDIA GPU driver** — use CUDA, PJRT, or simulated accelerators first.
-* ❌ **Do not recreate PyTorch** — frameworks run above Nexora.
-* ❌ **Do not build another ML compiler** — leverage XLA, MLIR, and Triton.
-* ❌ **Do not recreate Kubernetes** — cluster orchestration is initially out of scope.
-* ❌ **Do not recreate vLLM or Dynamo** — their algorithms provide workload inputs.
-* ❌ **Do not implement complete POSIX compatibility** — avoid unnecessary legacy baggage.
-* ❌ **Do not implement hundreds of hardware drivers** — focus on QEMU x86-64, virtio, and hosted accelerators.
+Nexora focuses on the operating-system layer where AI workload semantics can influence resource management. It is designed to complement, rather than duplicate, mature ecosystems.
+
+* **Accelerator stacks:** CUDA, ROCm, PJRT, and vendor drivers remain the execution substrate for practical hardware experiments.
+* **ML frameworks:** PyTorch and JAX remain the programming and model-execution environments above Nexora.
+* **Compilers:** XLA, MLIR, Triton, and related compiler systems remain responsible for lowering and kernel generation.
+* **Cluster orchestration:** Kubernetes and distributed serving platforms operate above Nexora's initial machine-level resource-management scope.
+* **Model serving:** Systems such as vLLM and Dynamo are workloads and integration targets, not components Nexora seeks to reproduce.
+* **POSIX compatibility:** Nexora prioritizes the mechanisms required to test AI-native OS abstractions rather than broad legacy API coverage.
+* **Device breadth:** Early hardware work concentrates on a narrow set of representative interfaces so that semantic scheduling, memory, topology, and isolation can be measured rigorously.
 
 ---
 
