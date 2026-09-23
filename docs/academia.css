@@ -1620,3 +1620,373 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ==========================================================================
+   2026-09-23 standard readability pass
+   Conventional research-site proportions. This deliberately removes the
+   poster-like hero treatment and prioritizes scanability and line length.
+   ========================================================================== */
+
+:root {
+  --page: min(1240px, calc(100% - 40px));
+  --radius: 12px;
+  --radius-sm: 9px;
+}
+
+body {
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+body::before {
+  display: none;
+}
+
+.site-header {
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.header-inner {
+  min-height: 64px;
+  gap: 18px;
+}
+
+main {
+  padding: 40px 0 80px;
+}
+
+/* --- Hero: standard two-column research landing page --- */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 48px;
+  align-items: start;
+  padding: 48px 52px;
+  border-radius: 14px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.hero::before,
+.hero::after {
+  display: none;
+}
+
+.hero-copy {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.hero-aside {
+  min-width: 0;
+  padding-left: 28px;
+  border-left: 1px solid var(--line);
+}
+
+h1 {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 0 18px;
+  font-size: clamp(2.4rem, 3.25vw, 3.65rem);
+  line-height: 1.08;
+  letter-spacing: -.028em;
+  text-wrap: pretty;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.lede {
+  max-width: 760px;
+  font-size: 1.08rem;
+  line-height: 1.58;
+}
+
+.hero-actions {
+  margin-top: 24px;
+}
+
+.hero-note {
+  padding-top: 14px;
+}
+
+.hero-note strong {
+  display: block;
+  font-size: .98rem;
+  line-height: 1.38;
+}
+
+/* --- Conventional content hierarchy --- */
+.metrics {
+  margin: 18px 0 0;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.metric {
+  padding: 16px 18px;
+}
+
+.metric-value {
+  font-size: 1.55rem;
+}
+
+.content-section {
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 34px;
+  padding: 58px 0 8px;
+}
+
+.section-label {
+  position: static;
+  padding-top: 8px;
+}
+
+.section-body,
+.section-body > * {
+  min-width: 0;
+}
+
+.section-body > h2 {
+  max-width: 760px;
+}
+
+h2 {
+  font-size: clamp(1.75rem, 2.4vw, 2.45rem);
+  line-height: 1.14;
+  letter-spacing: -.02em;
+}
+
+.section-intro {
+  max-width: 760px;
+  margin-bottom: 24px;
+  font-size: 1rem;
+  line-height: 1.62;
+}
+
+.card,
+.paper,
+.status-panel,
+.panel {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.card {
+  min-height: 0;
+  padding: 20px;
+}
+
+.card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.card::after {
+  display: none;
+}
+
+.paper {
+  padding: 22px;
+}
+
+.arch-layer {
+  padding: 16px 18px;
+  border-radius: 9px;
+}
+
+.arch-layer:hover {
+  transform: none;
+}
+
+.status-row {
+  padding: 16px 18px;
+}
+
+.callout {
+  border-radius: 0 8px 8px 0;
+}
+
+.code-frame {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+/* Avoid accidental text-column squeezing in dense grids. */
+.two-col,
+.three-col,
+.four-col,
+.status-row,
+.arch-layer,
+.meter-row,
+.sim-shell,
+.study-hero {
+  min-width: 0;
+}
+
+.two-col > *,
+.three-col > *,
+.four-col > *,
+.status-row > *,
+.arch-layer > *,
+.meter-row > *,
+.sim-shell > *,
+.study-hero > * {
+  min-width: 0;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+strong,
+span {
+  overflow-wrap: break-word;
+}
+
+/* Keep prose readable rather than forcing narrow balanced headline columns. */
+h1,
+h2 {
+  text-wrap: pretty;
+}
+
+.study-title h1 {
+  max-width: 900px;
+  font-size: clamp(2.35rem, 3.1vw, 3.5rem);
+}
+
+.study-hero {
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 40px;
+}
+
+.sim-shell {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+/* --- Responsive --- */
+@media (max-width: 1100px) {
+  :root {
+    --page: min(100% - 32px, 1080px);
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 34px;
+    padding: 40px;
+  }
+
+  h1 {
+    font-size: clamp(2.35rem, 4.3vw, 3.3rem);
+  }
+
+  .four-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .hero,
+  .study-hero,
+  .sim-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    gap: 28px;
+  }
+
+  .hero-aside {
+    padding-left: 0;
+    padding-top: 22px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .content-section {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding-top: 48px;
+  }
+
+  .section-label {
+    padding-top: 0;
+  }
+
+  .three-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  :root {
+    --page: min(100% - 24px, 680px);
+  }
+
+  main {
+    padding-top: 24px;
+  }
+
+  .header-inner {
+    padding: 10px 0;
+  }
+
+  .hero {
+    padding: 28px 22px;
+    gap: 24px;
+    border-radius: 10px;
+  }
+
+  h1,
+  .study-title h1 {
+    max-width: none;
+    font-size: clamp(2rem, 8vw, 2.65rem);
+    line-height: 1.1;
+  }
+
+  h2 {
+    font-size: clamp(1.55rem, 7vw, 2.1rem);
+  }
+
+  .lede {
+    font-size: 1rem;
+  }
+
+  .hero-aside {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics,
+  .two-col,
+  .three-col,
+  .four-col,
+  .fact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric + .metric {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .content-section {
+    padding-top: 42px;
+  }
+
+  .card,
+  .paper,
+  .panel,
+  .study-summary {
+    padding: 18px;
+  }
+
+  .status-row,
+  .meter-row,
+  .arch-layer {
+    grid-template-columns: 1fr;
+  }
+}
