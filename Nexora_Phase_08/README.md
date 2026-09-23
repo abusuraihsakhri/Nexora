@@ -1,81 +1,88 @@
 # Nexora AIKernel — Phase 8
 
-**Milestone:** Inference-oriented experiments  
-**Baseline:** Complete Phase 7 device-path tree  
-**Status:** Restored, implemented, and host-tested
+## Inference-Oriented Resource Management
 
-Phase 8 extends the Phase 7 hardware-facing accelerator path with the inference orchestration semantics specified by the original Nexora roadmap.
+Phase 8 explores how an AI-native operating system can manage inference as a semantic workload rather than as an opaque collection of threads, allocations, and device calls.
 
-## Phase 8 additions
+The central idea is that the operating system can make better resource decisions when it can directly represent model residency, KV-cache state, request deadlines, batching opportunities, prefetch intent, and memory pressure.
 
-- persistent model objects and residency state
-- KV-cache/session residency metadata
-- memory-pressure-aware request admission
-- deadline-aware dynamic batching
-- request lifecycle/accounting
-- tensor prefetch planning
-- deterministic host behavioral tests
-- freestanding kernel compile/link integration
-- `make phase8-check` validation target
+## Core Concepts
 
-The Phase 7 PCI/DMA/simulated-accelerator implementation is retained intact underneath this layer.
+### Persistent model residency
 
-## Architecture boundary
+Model weights are represented as long-lived resources with explicit residency state and preferred execution resources. This allows model placement and eviction to become system-level policy decisions rather than incidental consequences of application allocation.
 
-Phase 8 is a research control plane. It models the decisions an AI-native operating system can make before dispatch:
+### KV-cache state
+
+Session-specific KV state is represented explicitly, including ownership, size, memory location, pinning, and recency information. This creates a basis for future reuse, migration, eviction, and distributed-state policies.
+
+### Memory-pressure-aware admission
+
+Inference requests carry estimated working-memory requirements. Admission considers a bounded memory budget and configurable high-watermark so the system can reject work before oversubscription becomes uncontrolled.
+
+### Deadline-aware dynamic batching
+
+Queued requests retain model identity, token counts, enqueue time, and deadlines. Compatible requests can be grouped into bounded batches, with earlier deadlines receiving priority.
+
+### Tensor prefetch planning
+
+The inference layer can express movement intent before a tensor is required, including source, destination, size, and need-by time. This provides a semantic hook for future topology- and bandwidth-aware transfer planning.
+
+## Semantic Flow
 
 ```text
-request
-  │
-  ├── model residency
-  ├── KV state
-  ├── deadline
-  ├── working-memory estimate
-  │
-  ▼
-admission control
-  │
-  ▼
-deadline-aware dynamic batch
-  │
-  ▼
-prefetch / placement intent
-  │
-  ▼
-Phase 7 accelerator path
+Inference request
+       │
+       ├── model residency
+       ├── KV-cache state
+       ├── memory estimate
+       └── deadline
+       │
+       ▼
+Admission control
+       │
+       ▼
+Dynamic batch formation
+       │
+       ├── prefetch intent
+       └── placement constraints
+       │
+       ▼
+Accelerator / resource path
 ```
 
-It does **not** claim to implement vLLM, CUDA, ROCm, PJRT, a tokenizer, real GPU kernels, or production KV-cache allocation.
+## Research Questions
 
-## Verify
+Phase 8 is intended to support measurable experiments around:
 
-Host behavioral test:
+- whether explicit model residency reduces cold-start overhead;
+- whether OS-visible KV state improves reuse and memory efficiency;
+- whether deadline-aware batching improves tail latency under mixed workloads;
+- whether memory-aware admission prevents pathological overload;
+- whether semantic prefetch reduces avoidable data-movement stalls.
 
-```sh
-make phase8-host-test
+## Current Implementation Scope
+
+The implementation provides bounded kernel-side metadata and policy primitives for model objects, KV state, inference requests, batching, admission control, memory accounting, and prefetch planning.
+
+It is a research control plane rather than a replacement for vLLM, CUDA, ROCm, PJRT, model compilers, tokenizers, or production accelerator drivers. Those systems remain complementary execution and integration layers.
+
+## Position in Nexora
+
+Phase 8 connects the earlier resource/device foundations to the later distributed-resource architecture:
+
+```text
+Semantic tensors + work graphs
+            │
+            ▼
+Resource / accelerator path
+            │
+            ▼
+Inference semantics
+(model + KV + request + batch)
+            │
+            ▼
+Distributed placement and transfer
 ```
 
-Freestanding kernel build + symbol checks + host test:
-
-```sh
-make phase8-check
-```
-
-Full scripted cross-check:
-
-```sh
-./scripts/phase8_crosscheck.sh
-```
-
-## Key files
-
-- `include/ai/inference.h` — Phase 8 public API
-- `src/ai/inference.c` — bounded inference orchestration implementation
-- `tests/test_phase8.c` — deterministic behavioral test
-- `docs/PHASE8_INFERENCE_EXPERIMENTS.md` — architecture, invariants, and limits
-- `docs/PHASE8_RESTORATION_NOTES.md` — provenance of the repository restoration
-- `docs/ROADMAP.md` — roadmap with Milestone 8 marked implemented
-
-## Restoration provenance
-
-The historical Phase 8 ZIP was not present in the repository or accessible Project/Library file storage during restoration. This directory was reconstructed from the repository's own Phase 7 baseline, Milestone 8 roadmap definition, and Phase 9 integration contract. It is therefore traceable and testable, but is not claimed to be byte-identical to the unavailable historical archive.
+The result is a clearer operating-system abstraction for studying multi-model inference under memory pressure, heterogeneous compute, data locality, and latency constraints.
