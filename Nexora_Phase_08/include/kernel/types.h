@@ -19,6 +19,8 @@ typedef enum {
     true = 1
 } bool;
 
+#ifndef NULL
 #define NULL ((void*)0)
+#endif
 
 #endif
