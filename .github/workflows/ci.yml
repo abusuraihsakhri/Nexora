@@ -12,6 +12,14 @@ permissions:
 
 
 jobs:
+  phase8-inference:
+    name: Phase 8 inference orchestration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test Phase 8
+        run: make -C Nexora_Phase_08 phase8-check
+
   phase14-kernel:
     name: Phase 14 kernel build + host tests
     runs-on: ubuntu-latest
