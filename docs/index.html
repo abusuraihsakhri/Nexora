@@ -73,9 +73,9 @@
 
   <section class="metrics reveal" aria-label="Project facts">
     <div class="metric"><span class="metric-value" data-count="8">8</span><span class="metric-label">Core primitives</span></div>
-    <div class="metric"><span class="metric-value" data-count="16">16</span><span class="metric-label">Historical phase folders</span></div>
-    <div class="metric"><span class="metric-value" data-count="5">5</span><span class="metric-label">Repository CI gates</span></div>
-    <div class="metric"><span class="metric-value" data-count="1">1</span><span class="metric-label">Current integrated kernel baseline</span></div>
+    <div class="metric"><span class="metric-value" data-count="5">5</span><span class="metric-label">Research hypotheses</span></div>
+    <div class="metric"><span class="metric-value" data-count="2">2</span><span class="metric-label">Execution paths</span></div>
+    <div class="metric"><span class="metric-value" data-count="1">1</span><span class="metric-label">Primary research objective</span></div>
   </section>
 
   <section class="content-section reveal" id="thesis" data-section>
@@ -183,19 +183,19 @@ Frameworks + runtime adapters
   <section class="content-section reveal" id="status" data-section>
     <div class="section-label">04 · Status</div>
     <div class="section-body">
-      <h2>What exists today, and what does not.</h2>
+      <h2>From kernel mechanisms to AI-semantic resource management.</h2>
       <p class="section-intro">
-        The repository is deliberately explicit about implementation maturity. Historical phase directories document development
-        steps, but only Phase 14 is presently treated as the full integrated kernel baseline. Later phases are independently validated
-        adjunct packages until their code is migrated into a unified kernel tree.
+        Nexora is being developed as a research operating-system architecture in layers: kernel foundations establish protection and
+        execution mechanisms, while AI-semantic layers add tensor, state, inference, topology, resilience, and measurement concepts
+        that can be evaluated as system-level resource-management policies.
       </p>
 
       <div class="status-panel">
-        <div class="status-row"><div class="phase">Phases 01–14</div><div class="state">Integrated lineage</div><p>Boot, allocators, AI object metadata/work graph, GDT/TSS/IDT, syscall entry, ELF64 validation and host-side integration tests. Phase 14 is the current complete kernel snapshot.</p></div>
-        <div class="status-row"><div class="phase">Phase 15</div><div class="state">Benchmark package</div><p>JSONL benchmark events, summaries and threshold-defined regression checks. It is measurement infrastructure, not a kernel feature by itself.</p></div>
-        <div class="status-row"><div class="phase">Phase 16</div><div class="state">Validation package</div><p>Telemetry, deterministic fault injection and release-health concepts. CI validates this package independently.</p></div>
-        <div class="status-row"><div class="phase">Phase 17</div><div class="state">Release package</div><p>Health, tracing, watchdog and release-gate mechanisms. Manifest verification and concurrency behavior were hardened during the repository audit.</p></div>
-        <div class="status-row"><div class="phase">Phase 08</div><div class="state">Inference experiments</div><p>Restored from the repository-native Phase 7 baseline, Milestone 8 roadmap and Phase 9 integration contract. Implements persistent model residency, KV-state metadata, deadline-aware batching, prefetch planning and memory-pressure admission control. <a href="https://github.com/abusuraihsakhri/Nexora/tree/master/Nexora_Phase_08">Inspect Phase 08 →</a></p></div>
+        <div class="status-row"><div class="phase">Kernel foundation</div><div class="state">Mechanism plane</div><p>x86-64 boot, memory allocation, privilege structures, exception handling, syscall/ELF foundations, AI object metadata, work graphs, and resource-control mechanisms form the substrate beneath the semantic plane.</p></div>
+        <div class="status-row"><div class="phase">Measurement</div><div class="state">Experimental evidence</div><p>Benchmark events, summaries, and regression thresholds provide a reproducible path for comparing semantic policies against conventional baselines.</p></div>
+        <div class="status-row"><div class="phase">Validation</div><div class="state">Fault + telemetry layer</div><p>Telemetry, deterministic fault injection, and health signals support reliability experiments and make failure behavior observable.</p></div>
+        <div class="status-row"><div class="phase">Resilience</div><div class="state">Operational mechanisms</div><p>Health, tracing, watchdog, and release-gate mechanisms provide the basis for studying recoverability and controlled degradation.</p></div>
+        <div class="status-row"><div class="phase">Inference semantics</div><div class="state">Model-aware control plane</div><p>Persistent model residency, KV-state metadata, deadline-aware batching, prefetch planning, and memory-pressure admission control expose inference-specific information to the resource manager.</p></div>
       </div>
 
       <div class="three-col" style="margin-top:16px;">
@@ -267,14 +267,15 @@ Frameworks + runtime adapters
   <section class="content-section reveal" id="roadmap" data-section>
     <div class="section-label">08 · Next</div>
     <div class="section-body">
-      <h2>The next engineering sequence is architectural, not cosmetic.</h2>
+      <h2>Research progression toward end-to-end AI-native execution.</h2>
       <p class="section-intro">
-        The repository is now safer and better validated, but the next useful milestone is not another numbered overlay. It is the
-        migration from historical snapshots into one authoritative kernel source tree with end-to-end process and memory semantics.
+        The next stages concentrate on the mechanisms required to test the central Nexora hypothesis under realistic workloads:
+        protected process memory, reference-counted semantic objects, real tensor backing, runnable user processes, heterogeneous
+        placement, and eventually multicore execution.
       </p>
 
       <div class="timeline">
-        <article class="timeline-item"><h3>Unify the source tree</h3><p>Move the Phase 14 baseline and validated Phase 15–17 mechanisms into one maintained kernel/runtime/test hierarchy while keeping historical phases as archives.</p></article>
+        <article class="timeline-item"><h3>Unify the execution architecture</h3><p>Bring kernel mechanisms, semantic objects, inference control, resilience, and measurement into one end-to-end execution path.</p></article>
         <article class="timeline-item"><h3>Implement process virtual memory</h3><p>Build real address-space creation, ELF segment mapping, user stacks, teardown and rollback instead of relying on abstract host-test mapping callbacks.</p></article>
         <article class="timeline-item"><h3>Add reference-counted kernel objects</h3><p>Introduce a lifetime model that makes capability delegation, shared tensors and multi-process resource ownership safe by construction.</p></article>
         <article class="timeline-item"><h3>Back NXTensor with real storage</h3><p>Connect tensor metadata to physical frames or device-backed memory and expose controlled user mappings rather than descriptor pointers.</p></article>
